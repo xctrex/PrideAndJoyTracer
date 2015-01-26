@@ -13,11 +13,8 @@
 **/
 
 #include "ImageFormat.h"
-#ifdef _WIN32
-#include <memory>
-#else
-#include <tr1/memory>
-#endif
+#include "boost/shared_ptr.hpp"
+#include "boost/noncopyable.hpp"
 
 namespace glimg
 {
@@ -56,11 +53,7 @@ namespace glimg
 	namespace detail
 	{
 		class ImageSetImpl;
-#ifdef _WIN32
-		typedef std::shared_ptr<const ImageSetImpl> ImageSetImplPtr;
-#else
-		typedef std::tr1::shared_ptr<const ImageSetImpl> ImageSetImplPtr;
-#endif
+		typedef boost::shared_ptr<const ImageSetImpl> ImageSetImplPtr;
 	}
 
 	class ImageSet;

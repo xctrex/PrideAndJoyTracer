@@ -1,3 +1,12 @@
+# Visual Studio files
+*.tlog
+*.sdf
+*.osdf
+*.opensdf
+*.exe
+*.log
+*.obj
+
 # Windows image file caches
 Thumbs.db
 ehthumbs.db
