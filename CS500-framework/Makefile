@@ -3,7 +3,7 @@
 ########################################################################
 
 OPTIMIZE = -g
-CXXFLAGS = $(OPTIMIZE) -Wnarrowing -I. -I. -g -Iglsdk/glm -Iglsdk/boost -Iglsdk/glimg/include -Iglsdk/freeglut/include -Iglsdk/glload/include -I/usr/X11R6/include/GL/ -I/usr/include/GL/ -fopenmp -msse3 -DEIGEN_NO_DEBUG -std=c++11
+CXXFLAGS = $(OPTIMIZE) -Wnarrowing -I. -g -Iglsdk/glm -Iglsdk/boost -Iglsdk/glimg/include -Iglsdk/freeglut/include -Iglsdk/glload/include -I/usr/X11R6/include/GL/ -I/usr/include/GL/ -fopenmp -msse3 -DEIGEN_NO_DEBUG -std=c++11
 LIBS = -pthread -L/usr/lib  -L/usr/local/lib -lassimp -lAntTweakBar -lfreeglut -lX11 -lGLU -lGL -L/usr/X11R6/lib -Lglsdk/glimg/lib/ -Lglsdk/glload/lib/ -Lglsdk/freeglut/lib/ -lglload -lglimg
 
 

@@ -55,7 +55,7 @@ void Scene::Command(const std::string c, const std::vector<double> f, const std:
     else if (c == "camera") {
         // syntax: camera x y z   qw qx qy qz   ry
         // Eye position (x,y,z),  view orientation (qw qx qy qz),  frustum height ratio ry
-        realtime->setCamera(glm::vec3(f[0],f[1],f[2]), glm::quat(f[3],f[4],f[5],f[6]), f[7]); }
+      realtime->setCamera(glm::vec3(f[0],f[1],f[2]), glm::quat(f[3],f[4],f[5],f[6]), f[7]); }
 
     else if (c == "ambient") {
         // syntax: ambient r g b
@@ -116,19 +116,24 @@ void Scene::Command(const std::string c, const std::vector<double> f, const std:
         // prints 
         //   90 X --> (0.707 0.707 0.000 0.000) --> (0.707 0.707 0.000 0.000) 
         //   45 Z --> (0.924 0.000 0.000 0.383) --> (0.653 0.653 0.271 0.271)
-        glm::quat q, accum(1,0,0,0);
-        for (int c=0;  c<strings.size();  c+=2) {
+        quat q, accum(1,0,0,0);
+        for (int c=0;  c<f.size();  c+=2) {
             float w = cos(f[c]*PI/180.0/2.0); // Cos and sin of angle/2 (as required by quaternions)
             float d = sin(f[c]*PI/180.0/2.0);
             int axis = int(f[c+1]);    // Axis 1, 2, 3 (for X, Y, Z)
-            #define C(a) ((axis==a) ? d : 0.0)
-            q = glm::quat(w, C(1), C(2), C(3));
+            #define C(a) ((axis==a) ? 1.0 : 0.0)
+            q = quat(w, d*C(1), d*C(2), d*C(3));
             accum = q * accum;          // Accumulate product of individual quaternions into accum;
             printf("%4g %c --> (%5.3f %5.3f %5.3f %5.3f) --> (%5.3f %5.3f %5.3f %5.3f) \n",
                    f[c], " XYZ"[axis],   q.w, q.x, q.y, q.z,
-                   accum.w, accum.x, accum.y, accum.z); }
+                   accum.w, accum.x, accum.y, accum.z);
+            // Various sanity checks of GLM's quaternions.  (I'm slightly distrustful of GLM.)
+            //{ vec3 v = glm::rotate(accum, vec3(1,0,0)); printf("   (%5.3g %5.3g %5.3g)\n", v.x, v.y, v.z); }
+            //{ vec3 v = glm::rotate(accum, vec3(0,1,0)); printf("   (%5.3g %5.3g %5.3g)\n", v.x, v.y, v.z); }
+            //{ vec3 v = glm::rotate(accum, vec3(0,0,1)); printf("   (%5.3g %5.3g %5.3g)\n", v.x, v.y, v.z); }
+              
+        }
     }
-
     else {
         fprintf(stderr, "\n*********************************************\n");
         fprintf(stderr, "* Unknown command: %s\n", c.c_str());

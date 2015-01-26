@@ -231,12 +231,12 @@ public:
 
     // Camera/viewing parameters
     glm::vec3 ambient;
-    glm::vec3 eye;                   // Position of eye for viewing scene
-    glm::quat orient;           // Represents rotation of -Z to view direction
+    glm::vec3 eye;      // Position of eye for viewing scene
+    glm::quat orient;   // Represents rotation of -Z to view direction
     float ry;
     float front, back;
     float spin, tilt;
-    float cDist;               // Distance from eye to center of scene
+    float cDist;              // Distance from eye to center of scene
     //float lightSpin, lightTilt, lightDist;
 
     int mouseX, mouseY;
