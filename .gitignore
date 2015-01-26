@@ -6,6 +6,8 @@
 *.exe
 *.log
 *.obj
+*.idb
+*.pdb
 
 # Windows image file caches
 Thumbs.db
