@@ -2,6 +2,7 @@
 // Temporary code.  Remove this from your raytracer.  This displays
 // the contents of a scene file in realtime in a GLUT window.
 ////////////////////////////////////////////////////////////////////////////////
+#pragma once
 
 #include <string>
 #include <fstream>
@@ -133,7 +134,7 @@ class Mesh
     }
 };
 
-class Material
+class RealtimeMaterial
 {
  public:
     glm::vec3 Kd, Ks;
@@ -142,9 +143,9 @@ class Material
 
     virtual bool isLight() { return false; printf("false\n"); }
 
-    Material()  : Kd(glm::vec3(1.0, 0.5, 0.0)), Ks(glm::vec3(1,1,1)), alpha(1.0), texid(0) {}
-    Material(const glm::vec3 d, const glm::vec3 s, const float a) : Kd(d), Ks(s), alpha(a), texid(0) {}
-    Material(Material& o) { Kd=o.Kd;  Ks=o.Ks;  alpha=o.alpha;  texid=o.texid; }
+    RealtimeMaterial()  : Kd(glm::vec3(1.0, 0.5, 0.0)), Ks(glm::vec3(1,1,1)), alpha(1.0), texid(0) {}
+    RealtimeMaterial(const glm::vec3 d, const glm::vec3 s, const float a) : Kd(d), Ks(s), alpha(a), texid(0) {}
+    RealtimeMaterial(RealtimeMaterial& o) { Kd=o.Kd;  Ks=o.Ks;  alpha=o.alpha;  texid=o.texid; }
 
     void SetTexture(const std::string path)
     {
@@ -183,13 +184,13 @@ class Material
     }
 };
 
-class Light: public Material
+class Light: public RealtimeMaterial
 {
 public:
 
     virtual bool isLight() { return true; printf("TRUE\n"); }
 
-    Light(const glm::vec3 e) : Material() { Kd = e; }
+    Light(const glm::vec3 e) : RealtimeMaterial() { Kd = e; }
 
     virtual void apply(const unsigned int program)
     {
@@ -209,10 +210,10 @@ class Obj
 public:
     glm::mat4 modelTR;
     Mesh* mesh;
-    Material* material;
+    RealtimeMaterial* material;
     glm::vec3 min, max;
 
-    Obj(Mesh* m, const glm::mat4& tr, Material* b,
+    Obj(Mesh* m, const glm::mat4& tr, RealtimeMaterial* b,
         const glm::vec3& _min, const glm::vec3& _max)
         : mesh(m), modelTR(tr), material(b), min(_min), max(_max) {}
 
@@ -258,9 +259,9 @@ public:
     
     std::vector<Obj*> objs;
     std::vector<Obj*> lights;
-    std::vector<Material*> materials;
+    std::vector<RealtimeMaterial*> materials;
 
-    Material* currentMaterial() { return materials.size() ? materials[materials.size()-1] : NULL; }
+    RealtimeMaterial* currentRealtimeMaterial() { return materials.size() ? materials[materials.size()-1] : NULL; }
 
     glm::quat ViewQuaternion() {
         return glm::conjugate(glm::angleAxis(tilt-90.0f, 1.0f, 0.0f, 0.0f)
@@ -283,11 +284,11 @@ public:
     void box(const glm::vec3 base, const glm::vec3 diag);
     void cylinder(const glm::vec3 base, const glm::vec3 axis, const float radius);
 
-    void createMaterial() { materials.push_back(new Material(*currentMaterial())); }
-    void setKd(const glm::vec3 c) { currentMaterial()->Kd = c; printf("setKd: %g %g %g\n", c[0], c[1], c[2]); }
-    void setKs(const glm::vec3 c) { currentMaterial()->Ks = c; }
-    void setAlpha(const float a) { currentMaterial()->alpha = a; }
-    void setTexture(const std::string path) { currentMaterial()->SetTexture(path); }
+    void createRealtimeMaterial() { materials.push_back(new RealtimeMaterial(*currentRealtimeMaterial())); }
+    void setKd(const glm::vec3 c) { currentRealtimeMaterial()->Kd = c; printf("setKd: %g %g %g\n", c[0], c[1], c[2]); }
+    void setKs(const glm::vec3 c) { currentRealtimeMaterial()->Ks = c; }
+    void setAlpha(const float a) { currentRealtimeMaterial()->alpha = a; }
+    void setTexture(const std::string path) { currentRealtimeMaterial()->SetTexture(path); }
     void triangleMesh(std::vector<float>* pnt,
                       std::vector<float>* nrm,
                       std::vector<float>* tex,
@@ -296,14 +297,14 @@ public:
         Mesh* m = new Mesh(pnt, nrm, tex, tan, tris);
         glm::vec3 min(0.0,0.0,0.0); // BOGUS
         glm::vec3 max(0.0,0.0,0.0); // BOGUS
-        Obj* obj = new Obj(m, glm::mat4(1.0), currentMaterial(), min, max);
+        Obj* obj = new Obj(m, glm::mat4(1.0), currentRealtimeMaterial(), min, max);
         objs.push_back(obj);
-        if (currentMaterial()->isLight())
+        if (currentRealtimeMaterial()->isLight())
             lights.push_back(obj);
     }
 
     void brdf(const glm::vec3 Kd, const glm::vec3 Ks, const float alpha)  {
-        materials.push_back(new Material(Kd, Ks, alpha));
+        materials.push_back(new RealtimeMaterial(Kd, Ks, alpha));
     }
 
     void light(const glm::vec3 e)  {

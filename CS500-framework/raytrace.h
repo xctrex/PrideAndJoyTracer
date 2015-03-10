@@ -1,28 +1,41 @@
 ///////////////////////////////////////////////////////////////////////
 // A framework for a raytracer.
 ////////////////////////////////////////////////////////////////////////
-
-// The vec* types are vectors of DOUBLES, since most raytracing
-// calculations should be done with doubles.
-#define GLM_FORCE_RADIANS
-#include <glm/glm.hpp>
-#include <glm/gtx/quaternion.hpp>
-typedef glm::dvec4 vec4;  
-typedef glm::dvec3 vec3;  
-typedef glm::dvec2 vec2;
-typedef glm::dquat quat;
+#pragma once
+#include "stdafx.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Scene
-
-class Realtime;
+#include "Camera.h"
+#include "Realtime.h"
+#include "Shape.h"
 
 class Scene {
 public:
-    int width, height;
-    Realtime* realtime;         // Remove this (realtime stuff)
 
-    Scene();
+    Scene() 
+        : m_ambientColor(vec3(0.0, 0.0, 0.0))
+    { 
+        m_currentMaterial.Kd = vec3(0.0, 0.0, 0.0);
+        m_currentMaterial.Ks = vec3(0.0, 0.0, 0.0);
+        m_currentMaterial.alpha = 0.0;
+        m_RealTime = new Realtime(); 
+    }
+
+    int m_Width, m_Height;
+    bool m_isRealTime = false;
+    bool m_nextShapeIsLight = false;
+    Camera m_Camera;
+    Material m_currentMaterial;
+    vec3 m_ambientColor;
+
+    Realtime* m_RealTime;         // Remove this (realtime stuff)
+
+    vec3 Lighting(const Intersection& intersection) const;
+
+    void PushBackShape(Shape * s);
+
+    vec3 GetVertex(std::vector<float>* pnt, int index);
 
     // The scene reader-parser will call the Command method with the
     // contents of each line in the scene file.
@@ -34,7 +47,7 @@ public:
     void ReadAssimpFile(const std::vector<double>& f, const std::string path);
     // As ReadAssimpFile parses the information from the model file,
     // it will call these methods:
-    void createMaterial();
+    void createRealtimeMaterial();
     void setTexture(const std::string path);
     void setKd(const glm::vec3 c);
     void setAlpha(const float a);
@@ -47,4 +60,7 @@ public:
     // The main program will call the TraceImage method to generate
     // and return the image.  This is the Ray Tracer!
     void TraceImage(vec3* image, const int pass);
+
+    std::vector<Shape*> m_Objects;
+    std::vector<Shape*> m_Lights;
 };

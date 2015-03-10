@@ -2,6 +2,7 @@
 // Temporary code.  Remove this from your raytracer.  This displays
 // the contents of a scene file in realtime in a GLUT window.
 ////////////////////////////////////////////////////////////////////////////////
+#include "stdafx.h"
 
 #include <string>
 #include <fstream>
@@ -232,7 +233,7 @@ Realtime::Realtime()
     cylMesh = CylMesh();
 
     // Initialize various member attributes
-    materials.push_back(new Material());
+    materials.push_back(new RealtimeMaterial());
 
     nav = false;
     spin = 0.0f;
@@ -319,7 +320,7 @@ void Realtime::DrawScene()
         
     for (unsigned int i=0;  i<objs.size();  i++) {
         Mesh* mesh = objs[i]->mesh;
-        Material* material = objs[i]->material;
+        RealtimeMaterial* material = objs[i]->material;
         glm::mat4& modelTR = objs[i]->modelTR;
         glm::mat3 normalTR = glm::mat3(glm::inverse(modelTR)); 
 
@@ -473,18 +474,18 @@ void Realtime::sphere(const glm::vec3 center, const float r)
 {
     glm::mat4 m = glm::translate(center) * glm::scale(r,r,r);
     glm::vec3 rrr(r,r,r);
-    Obj* obj = new Obj(sphMesh, m, currentMaterial(), center-rrr, center+rrr);
+    Obj* obj = new Obj(sphMesh, m, currentRealtimeMaterial(), center - rrr, center + rrr);
     objs.push_back(obj);
-    if (currentMaterial()->isLight())
+    if (currentRealtimeMaterial()->isLight())
         lights.push_back(obj);
 }
 
 void Realtime::box(const glm::vec3 base, const glm::vec3 diag)
 {
     glm::mat4 m = glm::translate(base) * glm::scale(diag[0],diag[1],diag[2]);
-    Obj* obj = new Obj(boxMesh, m, currentMaterial(), base, base+diag);
+    Obj* obj = new Obj(boxMesh, m, currentRealtimeMaterial(), base, base + diag);
     objs.push_back(obj);
-    if (currentMaterial()->isLight())
+    if (currentRealtimeMaterial()->isLight())
         lights.push_back(obj);
 }
 
@@ -506,8 +507,8 @@ void Realtime::cylinder(const glm::vec3 base, const glm::vec3 axis, const float 
     
     glm::mat4 m = glm::translate(base)*R*glm::scale(radius,radius,glm::length(axis));
     glm::vec3 rrr(radius,radius,radius);
-    Obj* obj = new Obj(cylMesh, m, currentMaterial(), base-rrr, base+axis+rrr);
+    Obj* obj = new Obj(cylMesh, m, currentRealtimeMaterial(), base - rrr, base + axis + rrr);
     objs.push_back(obj);
-    if (currentMaterial()->isLight())
+    if (currentRealtimeMaterial()->isLight())
         lights.push_back(obj);
 }

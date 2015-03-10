@@ -1,6 +1,7 @@
 //////////////////////////////////////////////////////////////////////
 // Provides the framework for a raytracer.
 ////////////////////////////////////////////////////////////////////////
+#include "stdafx.h"
 
 #include <math.h>
 #include <string>
@@ -32,79 +33,201 @@ std::uniform_real_distribution<> U01random(0.0, 1.0);
 
 #include "raytrace.h"
 #include "realtime.h"
+#include "Shape.h"
 
-Scene::Scene() { realtime = new Realtime(); }
-void Scene::createMaterial() { realtime->createMaterial(); }
-void Scene::setTexture(const std::string path) { realtime->setTexture(path); }
-void Scene::setKd(const glm::vec3 c) { realtime->setKd(c); }
-void Scene::setAlpha(const float a) { realtime->setAlpha(a); }
+void Scene::createRealtimeMaterial() { m_RealTime->createRealtimeMaterial(); }
+void Scene::setTexture(const std::string path) { m_RealTime->setTexture(path); }
+void Scene::setKd(const glm::vec3 c) { m_RealTime->setKd(c); }
+void Scene::setAlpha(const float a) { m_RealTime->setAlpha(a); }
 void Scene::triangleMesh(std::vector<float>* pnt,
                   std::vector<float>* nrm,
                   std::vector<float>* tex,
                   std::vector<float>* tan,
-                  std::vector<unsigned int>* tris) { realtime->triangleMesh(pnt, nrm, tex, tan, tris); }
+                  std::vector<unsigned int>* tris) 
+{
+    if (m_isRealTime)
+    {
+        m_RealTime->triangleMesh(pnt, nrm, tex, tan, tris);
+    }
+    else
+    {
+        for (size_t i = 0; i < tris->size(); i += 3)
+        {
+            vec3 v0 = GetVertex(pnt, (*tris)[i]);
+            vec3 v2 = GetVertex(pnt, (*tris)[i + 1]);
+            vec3 v1 = GetVertex(pnt, (*tris)[i + 2]);
+            bool tempNextShapeIsLight = m_nextShapeIsLight;
+            PushBackShape(new Triangle(v0, v1, v2));
+            // A triangle doesn't count as a whole shape (it's only part of a mesh)
+            // so keep the status of m_nextShapeIsLight consistent until the whold mesh
+            // has been processed
+            m_nextShapeIsLight = tempNextShapeIsLight;
+        }
+        m_nextShapeIsLight = false;
+    }
+}
+
+vec3 Scene::GetVertex(std::vector<float>* pnt, int index)
+{
+    return vec3((*pnt)[index * 4], (*pnt)[index * 4 + 1], (*pnt)[index * 4 + 2]);
+}
 
 void Scene::Command(const std::string c, const std::vector<double> f, const std::vector<std::string> strings)
 {
-    if (c == "screen") {
+    if (c == "screen")
+    {
         // syntax: screen width height
-        realtime->setScreen(int(f[0]),int(f[1]));
-        width = int(f[0]);
-        height = int(f[1]); }
+        if (m_isRealTime)
+        {
+            m_RealTime->setScreen(int(f[0]), int(f[1]));
+        }
+        m_Width = int(f[0]);
+        m_Height = int(f[1]);
+        m_Camera.m_Width = m_Width;
+        m_Camera.m_Height = m_Height;
+    }
 
-    else if (c == "camera") {
+    else if (c == "camera")
+    {
         // syntax: camera x y z   qw qx qy qz   ry
         // Eye position (x,y,z),  view orientation (qw qx qy qz),  frustum height ratio ry
-      realtime->setCamera(glm::vec3(f[0],f[1],f[2]), glm::quat(f[3],f[4],f[5],f[6]), f[7]); }
+        if (m_isRealTime)
+        {
+            m_RealTime->setCamera(glm::vec3(f[0], f[1], f[2]), glm::quat(f[3], f[4], f[5], f[6]), f[7]);
+        }
+        else
+        {
+            m_Camera = Camera(vec3(f[0], f[1], f[2]), quat(f[3], f[4], f[5], f[6]), f[7], m_Width, m_Height);
+        }
+    }
 
-    else if (c == "ambient") {
+    else if (c == "ambient") 
+    {
         // syntax: ambient r g b
         // Sets the ambient color.  Note: This parameter is temporary.
         // It will be ignored once your raytracer becomes capable of
         // accurately *calculating* the true ambient light.
-        realtime->setAmbient(glm::vec3(f[0], f[1], f[2])); }
+        if (m_isRealTime)
+        {
+            m_RealTime->setAmbient(glm::vec3(f[0], f[1], f[2]));
+        }
+        else
+        {
+            m_ambientColor = vec3(f[0], f[1], f[2]);
+        }
+    }
 
-    else if (c == "brdf")  {
+    else if (c == "brdf")
+    {
         // syntax: brdf  r g b   r g b  alpha
         // First rgb is Diffuse reflection, second is specular reflection.
         // Creates a Material instance to be picked up by successive shapes
-        realtime->brdf(glm::vec3(f[0], f[1], f[2]), glm::vec3(f[3], f[4], f[5]), f[6]); }
+        if (m_isRealTime)
+        {
+            m_RealTime->brdf(glm::vec3(f[0], f[1], f[2]), glm::vec3(f[3], f[4], f[5]), f[6]);
+        }
+        else
+        {
+            m_currentMaterial.Kd = vec3(f[0], f[1], f[2]);
+            m_currentMaterial.Ks = vec3(f[3], f[4], f[5]);
+            m_currentMaterial.alpha = f[6];
+        }
+    }
 
-    else if (c == "light") {
+    else if (c == "light") 
+    {
         // syntax: light  r g b   
         // The rgb is the emission of the light
         // Creates a Material instance to be picked up by successive shapes
-        realtime->light(glm::vec3(f[0], f[1], f[2])); }
+        if (m_isRealTime)
+        {
+            m_RealTime->light(glm::vec3(f[0], f[1], f[2]));
+        }
+        else
+        {
+            m_currentMaterial.emitted = vec3(f[0], f[1], f[2]);
+            m_nextShapeIsLight = true;
+        }
+    }
    
-    else if (c == "sphere") {
+    else if (c == "sphere")
+    {
         // syntax: sphere x y z   r
         // Creates a Shape instance for a sphere defined by a center and radius
-        realtime->sphere(glm::vec3(f[0], f[1], f[2]), f[3]); }
+        if (m_isRealTime)
+        {
+            m_RealTime->sphere(glm::vec3(f[0], f[1], f[2]), f[3]);
+        }
+        else
+        {
+            PushBackShape(new Sphere(vec3(f[0], f[1], f[2]), f[3]));
+        }
+    }
 
-    else if (c == "box") {
+    else if (c == "box")
+    {
         // syntax: box bx by bz   dx dy dz
         // Creates a Shape instance for a box defined by a corner point and diagonal vector
-        realtime->box(glm::vec3(f[0], f[1], f[2]), glm::vec3(f[3], f[4], f[5])); }
+        if (m_isRealTime)
+        {
+            m_RealTime->box(glm::vec3(f[0], f[1], f[2]), glm::vec3(f[3], f[4], f[5]));
+        }
+        else
+        {
+            PushBackShape(new Box(vec3(f[0], f[1], f[2]), vec3(f[3], f[4], f[5])));
+        }
+    }
 
-    else if (c == "cylinder") {
+    else if (c == "cylinder")
+    {
         // syntax: cylinder bx by bz   ax ay az  r
         // Creates a Shape instance for a cylinder defined by a base point, axis vector, and radius
-        realtime->cylinder(glm::vec3(f[0], f[1], f[2]), glm::vec3(f[3], f[4], f[5]), f[6]); }
+        if (m_isRealTime)
+        {
+            m_RealTime->cylinder(glm::vec3(f[0], f[1], f[2]), glm::vec3(f[3], f[4], f[5]), f[6]);
+        }
+        else
+        {
+            PushBackShape(new Cylinder(vec3(f[0], f[1], f[2]), vec3(f[3], f[4], f[5]), f[6]));
+        }
+    }
 
-    else if (c == "mesh") {
+    else if (c == "triangle")
+    {
+        // syntax: triangle v0x v0y v0z   v1x v1y v1z   v2x v2y v2z
+        // Creates a triangle defined by three vertices
+        if (m_isRealTime)
+        {
+
+        }
+        else
+        {
+            PushBackShape(new Triangle(vec3(f[0], f[1], f[2]), vec3(f[3], f[4], f[5]), vec3(f[6], f[7], f[8])));
+        }
+    }
+
+    else if (c == "mesh")
+    {
         // syntax: mesh  qw qx qy qz   s  tx ty tz  filename
         // Creates many Shape instances (one per triangle) by reading
         // model(s) from filename. All triangles are rotated by a
         // quaternion (qw qx qy qz), uniformly scaled by s, and
         // translated by (tx ty tz) .
-      ReadAssimpFile(f, strings[0]);  }
+      ReadAssimpFile(f, strings[0]);
+    }
 
-    else if (c == "texture") {
+    else if (c == "texture")
+    {
         // syntax: texture  filename
         // Reads a texture, and applys it to the latest Material as a diffuse texture
-        realtime->setTexture(strings[0]); }
+        if (m_isRealTime)
+        {
+            m_RealTime->setTexture(strings[0]);
+        }
+    }
 
-    else if (c == "quat") {
+    else if (c == "quat")
+    {
         // syntax:  quat   angle axis   angle axis   angle axis ...
         // A list of angle axis rotations is accumulated into a
         // quaternion and printed.  This is useful for building the
@@ -141,24 +264,87 @@ void Scene::Command(const std::string c, const std::vector<double> f, const std:
     }
 }
 
+void Scene::PushBackShape(Shape* s)
+{
+    s->m_material = m_currentMaterial;
+    if (m_nextShapeIsLight)
+    {
+        m_Lights.push_back(s);
+        m_nextShapeIsLight = false;
+    }
+    else
+    {
+        m_Objects.push_back(s);
+    }
+}
+
 void Scene::TraceImage(vec3* image, const int pass)
 {
-    realtime->run();                          // Remove this (realtime stuff)
+    //realtime->run();                          // Remove this (realtime stuff)
 
 #pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
-    for (int y=0;  y<height;  y++) {
+    for (int y=0;  y<m_Height;  y++) 
+    {
 
         fprintf(stderr, "Rendering %4d\r", y);
-        for (int x=0;  x<width;  x++) {
+        for (int x = 0; x < m_Width; x++)
+        {
+            Ray ray = m_Camera.CalculateRayAtPixel((double)x, (double)y);
             vec3 color;
-            if ((x-width/2)*(x-width/2)+(y-height/2)*(y-height/2) < 100*100)
-                color = vec3(U01random(prng), U01random(prng), U01random(prng));
-            else if (abs(x-width/2)<4 || abs(y-height/2)<4)
-                color = vec3(0.0, 0.0, 0.0);
-            else 
-                color = vec3(1.0, 1.0, 1.0);
-            image[y*width + x] = color;
+            Intersection closestIntersection;
+            closestIntersection.t = FLT_MAX;
+            for (size_t i = 0; i < m_Objects.size(); ++i)
+            {
+                Intersection intersection;
+                intersection.t = FLT_MAX;
+                m_Objects[i]->Intersect(ray, intersection);
+                if (intersection.t < closestIntersection.t)
+                {
+                    closestIntersection = intersection;
+                }
+            }
+
+            if (closestIntersection.t < FLT_MAX)
+            {
+                image[y*m_Width + x] = Lighting(closestIntersection);
+            }
+            else
+            {
+                // Black if there is no intersection with any objects
+                image[y*m_Width + x] = vec3(0.0, 0.0, 0.0);
+            }
         }
     }
     fprintf(stderr, "\n");
+}
+
+vec3 Scene::Lighting(const Intersection& intersection) const
+{
+    vec3 out(0.0, 0.0, 0.0);
+    for (size_t i = 0; i < m_Lights.size(); ++i)
+    {
+        vec3 normal = glm::normalize(intersection.normal);
+        vec3 lightDir = static_cast<Sphere*>(m_Lights[i])->m_center - intersection.position;
+        double lambertian = glm::max(glm::dot(lightDir, normal), 0.0);
+        /*double distance = glm::length2(l);
+        vec3 l = glm::normalize(l);
+        vec3 v = m_Camera.eyePos - intersection.position;
+        double nDotL = glm::dot(intersection.normal, l);
+        double intensity = glm::saturate(nDotL);
+
+        vec3 diffuse = intensity * m_Lights[i]->m_material.emitted / distance;
+
+        vec3 h = glm::normalize(l + v);
+
+        double nDotH = glm::dot(intersection.normal, h);
+        intensity = glm::pow(glm::saturate(nDotH), 2.0);
+
+        vec3 specular = intensity * m_Lights[i]->m_material.emitted * 2.0 / distance;*/
+        vec3 reflectDir = glm::reflect(-lightDir, normal);
+        vec3 viewDir = glm::normalize(m_Camera.eyePos - intersection.position);
+        double specAngle = glm::max(glm::dot(reflectDir, viewDir), 0.0);
+        double specular = pow(specAngle, 4.0);
+        out += m_ambientColor * intersection.object->m_material.Kd + lambertian * intersection.object->m_material.Kd + specular * intersection.object->m_material.Ks;
+    }
+    return out;
 }

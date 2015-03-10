@@ -2,6 +2,7 @@
 // Uses the ASSIMP library to read mesh models in of 30+ file types
 // into a structure suitable for the raytracer.
 ////////////////////////////////////////////////////////////////////////
+#include "stdafx.h"
 
 #include <string>
 #include <vector>
@@ -61,7 +62,7 @@ void recurseModelNodes(Scene* scene,
         printf("%d:%d ", aimesh->mNumVertices, aimesh->mNumFaces);
 
         // Pass this node's surface material into the scene.
-        scene->createMaterial();
+        scene->createRealtimeMaterial();
         aiString texPath;
         aiMaterial* mtl = aiscene->mMaterials[aimesh->mMaterialIndex];
         // aiColor4D c;  

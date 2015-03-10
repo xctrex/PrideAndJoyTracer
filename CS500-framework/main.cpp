@@ -5,6 +5,7 @@
 //
 // Copyright © 2012 DigiPen Institute of Technology
 ////////////////////////////////////////////////////////////////////////
+#include "stdafx.h"
 
 #include <fstream>
 #include <sstream>
@@ -157,15 +158,15 @@ int main(int argc, char** argv)
     ReadScene(inName, scene);
 
     // Allocate and clear an image array
-    vec3 *image =  new vec3[scene->width*scene->height];
-    for (int y=0;  y<scene->height;  y++)
-        for (int x=0;  x<scene->width;  x++)
-            image[y*scene->width + x] = vec3(0,0,0);
+    vec3 *image =  new vec3[scene->m_Width * scene->m_Height];
+    for (int y=0;  y<scene->m_Height;  y++)
+        for (int x=0;  x<scene->m_Width;  x++)
+            image[y*scene->m_Width + x] = vec3(0,0,0);
 
     // RayTrace the image
     scene->TraceImage(image, 1);
 
     // Write the image
-    WriteHdrImage(hdrName, scene->width, scene->height, image, 1);
+    WriteHdrImage(hdrName, scene->m_Width, scene->m_Height, image, 1);
 
 }

@@ -1,0 +1,167 @@
+#pragma once
+#include "stdafx.h"
+#include "Ray.h"
+#include "Realtime.h"
+struct Material
+{
+    vec3 Kd;
+    vec3 Ks;
+    double alpha;
+    vec3 emitted;
+};
+
+struct Intersection;
+
+class Shape
+{
+public:
+    Shape()
+    {}
+
+    virtual bool Intersect(const Ray& ray, Intersection& intersection) const = 0;
+    Material m_material;
+};
+
+class Sphere : public Shape
+{
+public:
+    Sphere(vec3 center, double radius)
+        : m_center(center)
+        , m_radius(radius)
+    {}
+
+    bool Intersect(const Ray& ray, Intersection& intersection) const;
+    void EvalIntersectionAtT(const Ray& ray, double t, Intersection& intersection) const;
+
+    vec3 m_center;
+    double m_radius;
+};
+
+class Plane : public Shape
+{
+public:
+    Plane(vec3 normal, vec3 point)
+        : m_N(normal)
+        , m_d0(point)
+    {}
+
+    bool Intersect(const Ray& ray, Intersection& intersection) const;
+
+    vec3 m_N;
+    vec3 m_d0;
+};
+
+struct T_N
+{
+    T_N()
+        : t(-1.0)
+        , n(vec3(0.0, 0.0, 0.0))
+    {}
+
+    T_N(double time, vec3 normal)
+        : t(time)
+        , n(normal)
+    {}
+
+    double t;
+    vec3 n;
+};
+
+T_N tnMax(const T_N& tn0, const T_N& tn1);
+
+T_N tnMin(const T_N& tn0, const T_N& tn1);
+
+
+class Slab
+{
+public:
+    Slab(vec3 normal, double point0, double point1)
+        : m_N(normal)
+        , m_d0(point0)
+        , m_d1(point1)
+    {}
+       
+    bool Intersect(const Ray& ray, std::pair<T_N, T_N>& intersection) const;
+
+    vec3 m_N;
+    double m_d0;
+    double m_d1;
+};
+
+class SlabShape
+{
+public:
+    bool Intersect(const Ray& ray, T_N& t) const;
+
+    std::vector<Slab> m_slabs;
+};
+
+class Box : public Shape
+{
+public:
+    Box(vec3 corner, vec3 diagonalVector)
+    {
+        vec3 otherCorner = corner + diagonalVector;
+        // Make a slab shape
+        // Slab with normals in the x direction
+        m_slabBox.m_slabs.push_back(Slab(vec3(1.0, 0.0, 0.0), -otherCorner.x, -corner.x));
+
+        // Slab with normals in the y direction
+        m_slabBox.m_slabs.push_back(Slab(vec3(0.0, 1.0, 0.0), -otherCorner.y, -corner.y));
+
+        // Slab with normals in the z direction
+        m_slabBox.m_slabs.push_back(Slab(vec3(0.0, 0.0, 1.0), -otherCorner.z, -corner.z));
+    }
+
+    bool Intersect(const Ray& ray, Intersection& intersection) const;
+
+    SlabShape m_slabBox;
+};
+
+class Cylinder : public Shape
+{
+public :
+    Cylinder(vec3 basePoint, vec3 axis, double radius)
+        : m_basePoint(basePoint)
+        , m_axis(axis)
+        , m_radius(radius)
+    {}
+
+    bool Intersect(const Ray& ray, Intersection& intersection) const;
+
+    // Base point
+    vec3 m_basePoint;
+    // Axis
+    vec3 m_axis;
+    // radius
+    double m_radius;
+};
+
+inline double tripleProduct(vec3 a, vec3 b, vec3 c)
+{
+    return glm::dot(glm::cross(a, b), c);
+}
+
+class Triangle : public Shape
+{
+public:
+    Triangle(vec3 v0, vec3 v1, vec3 v2)
+        : m_v0(v0)
+        , m_v1(v1)
+        , m_v2(v2)
+    {}
+
+    bool Intersect(const Ray& ray, Intersection& intersection) const;
+
+    vec3 m_v0;
+    vec3 m_v1;
+    vec3 m_v2;
+};
+
+struct Intersection
+{
+    double t;
+    vec3 normal;
+    vec3 position;
+    const Shape *object;
+};
