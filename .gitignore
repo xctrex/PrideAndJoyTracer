@@ -8,6 +8,7 @@
 *.obj
 *.idb
 *.pdb
+*.ipch
 
 # Windows image file caches
 Thumbs.db

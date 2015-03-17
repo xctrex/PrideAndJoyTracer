@@ -2,6 +2,7 @@
 #include "stdafx.h"
 #include "Ray.h"
 #include "Realtime.h"
+
 struct Material
 {
     vec3 Kd;
@@ -19,8 +20,11 @@ public:
     {}
 
     virtual bool Intersect(const Ray& ray, Intersection& intersection) const = 0;
+    virtual Eigen::AlignedBox<float, 3> BoundingBox() const = 0;
     Material m_material;
 };
+
+Eigen::AlignedBox<float, 3> bounding_box(const Shape* obj);
 
 class Sphere : public Shape
 {
@@ -32,6 +36,7 @@ public:
 
     bool Intersect(const Ray& ray, Intersection& intersection) const;
     void EvalIntersectionAtT(const Ray& ray, double t, Intersection& intersection) const;
+    Eigen::AlignedBox<float, 3> BoundingBox() const;
 
     vec3 m_center;
     double m_radius;
@@ -46,6 +51,7 @@ public:
     {}
 
     bool Intersect(const Ray& ray, Intersection& intersection) const;
+    Eigen::AlignedBox<float, 3> BoundingBox() const;
 
     vec3 m_N;
     vec3 m_d0;
@@ -102,20 +108,25 @@ public:
     Box(vec3 corner, vec3 diagonalVector)
     {
         vec3 otherCorner = corner + diagonalVector;
+        m_bottomLeftFloor = vec3(glm::min(corner.x, otherCorner.x), glm::min(corner.y, otherCorner.y), glm::min(corner.z, otherCorner.z));
+        m_topRightCeiling = vec3(glm::max(corner.x, otherCorner.x), glm::max(corner.y, otherCorner.y), glm::max(corner.z, otherCorner.z));
         // Make a slab shape
         // Slab with normals in the x direction
-        m_slabBox.m_slabs.push_back(Slab(vec3(1.0, 0.0, 0.0), -otherCorner.x, -corner.x));
+        m_slabBox.m_slabs.push_back(Slab(vec3(1.0, 0.0, 0.0), -m_bottomLeftFloor.x, -m_topRightCeiling.x));
 
         // Slab with normals in the y direction
-        m_slabBox.m_slabs.push_back(Slab(vec3(0.0, 1.0, 0.0), -otherCorner.y, -corner.y));
+        m_slabBox.m_slabs.push_back(Slab(vec3(0.0, 1.0, 0.0), -m_bottomLeftFloor.y, -m_topRightCeiling.y));
 
         // Slab with normals in the z direction
-        m_slabBox.m_slabs.push_back(Slab(vec3(0.0, 0.0, 1.0), -otherCorner.z, -corner.z));
+        m_slabBox.m_slabs.push_back(Slab(vec3(0.0, 0.0, 1.0), -m_bottomLeftFloor.z, -m_topRightCeiling.z));
     }
 
     bool Intersect(const Ray& ray, Intersection& intersection) const;
+    Eigen::AlignedBox<float, 3> BoundingBox() const;
 
     SlabShape m_slabBox;
+    vec3 m_bottomLeftFloor;
+    vec3 m_topRightCeiling;
 };
 
 class Cylinder : public Shape
@@ -128,6 +139,7 @@ public :
     {}
 
     bool Intersect(const Ray& ray, Intersection& intersection) const;
+    Eigen::AlignedBox<float, 3> BoundingBox() const;
 
     // Base point
     vec3 m_basePoint;
@@ -152,6 +164,7 @@ public:
     {}
 
     bool Intersect(const Ray& ray, Intersection& intersection) const;
+    Eigen::AlignedBox<float, 3> BoundingBox() const;
 
     vec3 m_v0;
     vec3 m_v1;

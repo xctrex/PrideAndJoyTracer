@@ -24,16 +24,21 @@ public:
 
     int m_Width, m_Height;
     bool m_isRealTime = false;
+    bool m_usingBVH = false;
     bool m_nextShapeIsLight = false;
     Camera m_Camera;
     Material m_currentMaterial;
     vec3 m_ambientColor;
+
+    Eigen::KdBVH<float, 3, Shape*> m_kdBVH;
 
     Realtime* m_RealTime;         // Remove this (realtime stuff)
 
     vec3 Lighting(const Intersection& intersection) const;
 
     void PushBackShape(Shape * s);
+
+    void BuildKdTree();
 
     vec3 GetVertex(std::vector<float>* pnt, int index);
 

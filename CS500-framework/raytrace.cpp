@@ -7,9 +7,8 @@
 #include <string>
 #include <fstream>
 #include <vector>
+#include <time.h>
 
-//#include <Eigen/StdVector>
-//#include <Eigen_unsupported/Eigen/BVH>
 
 const double PI = 3.14159;
 
@@ -34,6 +33,7 @@ std::uniform_real_distribution<> U01random(0.0, 1.0);
 #include "raytrace.h"
 #include "realtime.h"
 #include "Shape.h"
+#include "Minimizer.h"
 
 void Scene::createRealtimeMaterial() { m_RealTime->createRealtimeMaterial(); }
 void Scene::setTexture(const std::string path) { m_RealTime->setTexture(path); }
@@ -145,7 +145,9 @@ void Scene::Command(const std::string c, const std::vector<double> f, const std:
         }
         else
         {
-            m_currentMaterial.emitted = vec3(f[0], f[1], f[2]);
+            m_currentMaterial.Kd = vec3(f[0], f[1], f[2]);
+            m_currentMaterial.Ks = vec3(f[3], f[4], f[5]);
+            m_currentMaterial.alpha = f[6];
             m_nextShapeIsLight = true;
         }
     }
@@ -278,10 +280,17 @@ void Scene::PushBackShape(Shape* s)
     }
 }
 
+void Scene::BuildKdTree()
+{
+    m_kdBVH = Eigen::KdBVH<float, 3, Shape*>(m_Objects.begin(), m_Objects.end());
+}
+
 void Scene::TraceImage(vec3* image, const int pass)
 {
-    //realtime->run();                          // Remove this (realtime stuff)
+    clock_t start = clock();
 
+    BuildKdTree();
+ 
 #pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
     for (int y=0;  y<m_Height;  y++) 
     {
@@ -293,16 +302,27 @@ void Scene::TraceImage(vec3* image, const int pass)
             vec3 color;
             Intersection closestIntersection;
             closestIntersection.t = FLT_MAX;
-            for (size_t i = 0; i < m_Objects.size(); ++i)
+            if (m_usingBVH)
             {
-                Intersection intersection;
-                intersection.t = FLT_MAX;
-                m_Objects[i]->Intersect(ray, intersection);
-                if (intersection.t < closestIntersection.t)
+                Minimizer minimizer(ray);
+                Eigen::BVMinimize(m_kdBVH, minimizer);
+                closestIntersection = minimizer.m_minimumIntersection;
+            }
+            else
+            {
+                // Brute force, compare against all objects
+                for (size_t i = 0; i < m_Objects.size(); ++i)
                 {
-                    closestIntersection = intersection;
+                    Intersection intersection;
+                    intersection.t = FLT_MAX;
+                    m_Objects[i]->Intersect(ray, intersection);
+                    if (intersection.t < closestIntersection.t)
+                    {
+                        closestIntersection = intersection;
+                    }
                 }
             }
+            
 
             if (closestIntersection.t < FLT_MAX)
             {
@@ -316,15 +336,21 @@ void Scene::TraceImage(vec3* image, const int pass)
         }
     }
     fprintf(stderr, "\n");
+
+    clock_t end = clock();
+
+    printf("TraceImage elapsed time: %d\n", (double)(end - start) / (CLOCKS_PER_SEC * 1000.0));
 }
 
 vec3 Scene::Lighting(const Intersection& intersection) const
 {
-    vec3 out(0.0, 0.0, 0.0);
+    // Emitted + ambient
+    vec3 out = m_ambientColor * intersection.object->m_material.Kd;
     for (size_t i = 0; i < m_Lights.size(); ++i)
     {
         vec3 normal = glm::normalize(intersection.normal);
-        vec3 lightDir = static_cast<Sphere*>(m_Lights[i])->m_center - intersection.position;
+        vec3 lightDir = glm::normalize(static_cast<Sphere*>(m_Lights[i])->m_center - intersection.position);
+        
         double lambertian = glm::max(glm::dot(lightDir, normal), 0.0);
         /*double distance = glm::length2(l);
         vec3 l = glm::normalize(l);
@@ -343,8 +369,18 @@ vec3 Scene::Lighting(const Intersection& intersection) const
         vec3 reflectDir = glm::reflect(-lightDir, normal);
         vec3 viewDir = glm::normalize(m_Camera.eyePos - intersection.position);
         double specAngle = glm::max(glm::dot(reflectDir, viewDir), 0.0);
-        double specular = pow(specAngle, 4.0);
-        out += m_ambientColor * intersection.object->m_material.Kd + lambertian * intersection.object->m_material.Kd + specular * intersection.object->m_material.Ks;
+        double spec = pow(specAngle, 4.0);
+        //out += m_ambientColor * intersection.object->m_material.Kd + lambertian * intersection.object->m_material.Kd + spec * intersection.object->m_material.Ks;
+        vec3 N = glm::normalize(intersection.normal);
+        vec3 L = glm::normalize(static_cast<Sphere*>(m_Lights[i])->m_center - intersection.position);
+        vec3 V = glm::normalize(m_Camera.eyePos - intersection.position);
+        vec3 H = glm::normalize(L + V);
+
+        vec3 diffuse = m_Lights[i]->m_material.Kd * glm::max(0.0, glm::dot(N, L)) * intersection.object->m_material.Kd;
+        float temp = glm::max(0.0, glm::dot(N, H));
+        vec3 specular = m_Lights[i]->m_material.Ks * glm::pow(glm::max(0.0, glm::dot(N, H)), 5.0) * intersection.object->m_material.Ks;
+        //vec3 specular = m_Lights[i]->m_material.Ks * spec * intersection.object->m_material.Ks;
+        out += diffuse + specular;
     }
     return out;
 }

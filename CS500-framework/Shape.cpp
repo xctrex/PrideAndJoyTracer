@@ -1,6 +1,11 @@
 #include "stdafx.h"
 #include "Shape.h"
 
+Eigen::AlignedBox<float, 3> bounding_box(const Shape* obj)
+{
+    return obj->BoundingBox();
+}
+
 bool Sphere::Intersect(const Ray& ray, Intersection& intersection) const
 {
     vec3 D = ray.Q - m_center;
@@ -42,6 +47,16 @@ void Sphere::EvalIntersectionAtT(const Ray& ray, double t, Intersection& interse
     intersection.position = ray.Eval(intersection.t);
     intersection.normal = intersection.position - m_center;
     intersection.object = static_cast<const Shape*>(this);
+}
+
+Eigen::AlignedBox<float, 3> Sphere::BoundingBox() const
+{
+    // Bottom left floor
+    vec3 blf = m_center - vec3(m_radius, m_radius, m_radius);
+    // Top right corner
+    vec3 trc = m_center + vec3(m_radius, m_radius, m_radius);    
+
+    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f(blf.x, blf.y, blf.z), Eigen::Vector3f(trc.x, trc.y, trc.z));
 }
 
 bool Plane::Intersect(const Ray& ray, Intersection& intersection) const
@@ -162,6 +177,11 @@ bool Box::Intersect(const Ray& ray, Intersection& intersection) const
     return false;
 }
 
+Eigen::AlignedBox<float, 3> Box::BoundingBox() const
+{
+    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f(m_bottomLeftFloor.x, m_bottomLeftFloor.y, m_bottomLeftFloor.z), Eigen::Vector3f(m_topRightCeiling.x, m_topRightCeiling.y, m_topRightCeiling.z));
+}
+
 bool Triangle::Intersect(const Ray& ray, Intersection& intersection) const
 {
     vec3 E1 = m_v1 - m_v0;
@@ -198,6 +218,18 @@ bool Triangle::Intersect(const Ray& ray, Intersection& intersection) const
     intersection.position = ray.Eval(intersection.t);
     intersection.normal = glm::cross(E2, E1);
     intersection.object = this;
+
+    return true;
+}
+
+Eigen::AlignedBox<float, 3> Triangle::BoundingBox() const
+{
+    // Bottom left floor
+    vec3 blf = vec3(glm::min(m_v0.x, m_v1.x, m_v2.x), glm::min(m_v0.y, m_v1.y, m_v2.y), glm::min(m_v0.z, m_v1.z, m_v2.z));
+    // Top right corner
+    vec3 trc = vec3(glm::max(m_v0.x, m_v1.x, m_v2.x), glm::max(m_v0.y, m_v1.y, m_v2.y), glm::max(m_v0.z, m_v1.z, m_v2.z));
+
+    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f(blf.x, blf.y, blf.z), Eigen::Vector3f(trc.x, trc.y, trc.z));
 }
 
 bool Cylinder::Intersect(const Ray& ray, Intersection& intersection) const
@@ -272,8 +304,24 @@ bool Cylinder::Intersect(const Ray& ray, Intersection& intersection) const
         intersection.normal = vec3(M.x, M.y, 0);
     }
     // Transform the normal back from the z-axis-aligned space
-    intersection.normal = glm::rotate(glm::conjugate(q), intersection.normal);
+    intersection.normal = -glm::rotate(glm::conjugate(q), intersection.normal);
 
     intersection.object = this;
     return true;
+}
+
+Eigen::AlignedBox<float, 3> Cylinder::BoundingBox() const
+{
+    vec3 otherPoint = m_basePoint + m_axis;
+    // Bottom left floor
+    vec3 blf = vec3(glm::min(m_basePoint.x, otherPoint.x), glm::min(m_basePoint.y, otherPoint.y), glm::min(m_basePoint.z, otherPoint.z));
+    // Top right corner
+    vec3 trc = vec3(glm::max(m_basePoint.x, otherPoint.x), glm::max(m_basePoint.y, otherPoint.y), glm::max(m_basePoint.z, otherPoint.z));
+
+    // Account for the radius
+    // This is not a perfectly tight bounding box, but it will do
+    blf -= vec3(m_radius, m_radius, m_radius);
+    trc += vec3(m_radius, m_radius, m_radius);
+
+    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f(blf.x, blf.y, blf.z), Eigen::Vector3f(trc.x, trc.y, trc.z));
 }
