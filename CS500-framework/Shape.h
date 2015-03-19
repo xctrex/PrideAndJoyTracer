@@ -7,7 +7,7 @@ struct Material
 {
     vec3 Kd;
     vec3 Ks;
-    double alpha;
+    double roughness;
     vec3 emitted;
 };
 
@@ -21,6 +21,9 @@ public:
 
     virtual bool Intersect(const Ray& ray, Intersection& intersection) const = 0;
     virtual Eigen::AlignedBox<float, 3> BoundingBox() const = 0;
+    vec3 Kd() const { return m_material.Kd; }
+    vec3 Ks() const { return m_material.Ks; }
+    double Roughness() const { return m_material.roughness; }
     Material m_material;
 };
 

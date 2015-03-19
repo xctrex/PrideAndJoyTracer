@@ -88,8 +88,8 @@ bool Slab::Intersect(const Ray& ray, std::pair<T_N, T_N>& intersection) const
     // if nDotR != 0
     if (glm::abs(nDotR) > FLT_EPSILON)
     {
-        T_N t0(-(m_d0 + glm::dot(m_N, ray.Q)) / nDotR, m_N);
-        T_N t1(-(m_d1 + glm::dot(m_N, ray.Q)) / nDotR, -m_N);
+        T_N t0(-(m_d0 + glm::dot(m_N, ray.Q)) / nDotR, -m_N);
+        T_N t1(-(m_d1 + glm::dot(m_N, ray.Q)) / nDotR, m_N);
         if (t0.t < t1.t)
         {
             intersection = std::pair<T_N, T_N>(t0, t1);
@@ -304,7 +304,7 @@ bool Cylinder::Intersect(const Ray& ray, Intersection& intersection) const
         intersection.normal = vec3(M.x, M.y, 0);
     }
     // Transform the normal back from the z-axis-aligned space
-    intersection.normal = -glm::rotate(glm::conjugate(q), intersection.normal);
+    intersection.normal = glm::normalize(glm::rotate(glm::conjugate(q), intersection.normal));
 
     intersection.object = this;
     return true;

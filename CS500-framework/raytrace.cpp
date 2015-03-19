@@ -130,7 +130,7 @@ void Scene::Command(const std::string c, const std::vector<double> f, const std:
         {
             m_currentMaterial.Kd = vec3(f[0], f[1], f[2]);
             m_currentMaterial.Ks = vec3(f[3], f[4], f[5]);
-            m_currentMaterial.alpha = f[6];
+            m_currentMaterial.roughness = f[6];
         }
     }
 
@@ -147,7 +147,7 @@ void Scene::Command(const std::string c, const std::vector<double> f, const std:
         {
             m_currentMaterial.Kd = vec3(f[0], f[1], f[2]);
             m_currentMaterial.Ks = vec3(f[3], f[4], f[5]);
-            m_currentMaterial.alpha = f[6];
+            m_currentMaterial.roughness = f[6];
             m_nextShapeIsLight = true;
         }
     }
@@ -287,8 +287,12 @@ void Scene::BuildKdTree()
 
 void Scene::TraceImage(vec3* image, const int pass)
 {
-    clock_t start = clock();
-
+    LARGE_INTEGER ticksPerSecond;
+    QueryPerformanceFrequency(&ticksPerSecond);
+    // Set the start time
+    LARGE_INTEGER start;
+    QueryPerformanceCounter(&start);
+    
     BuildKdTree();
  
 #pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
@@ -324,7 +328,7 @@ void Scene::TraceImage(vec3* image, const int pass)
             }
             
 
-            if (closestIntersection.t < FLT_MAX)
+            if (closestIntersection.t < FLT_MAX - FLT_EPSILON)
             {
                 image[y*m_Width + x] = Lighting(closestIntersection);
             }
@@ -337,9 +341,116 @@ void Scene::TraceImage(vec3* image, const int pass)
     }
     fprintf(stderr, "\n");
 
-    clock_t end = clock();
+    // Get the end time
+    LARGE_INTEGER end;
+    QueryPerformanceCounter(&end);
+    // get the difference between the current time and the start time
+    float seconds = (float)(end.QuadPart - start.QuadPart) / (float)(ticksPerSecond.QuadPart);
 
-    printf("TraceImage elapsed time: %d\n", (double)(end - start) / (CLOCKS_PER_SEC * 1000.0));
+
+    printf("TraceImage elapsed time: %f\n", seconds);
+}
+
+vec3 Scene::Diffuse(const Shape* light, const Intersection& intersection) const
+{
+    return intersection.object->Kd() / PI;
+}
+
+vec3 Scene::Specular(const Shape* light, const Intersection& intersection) const
+{
+    // Direction from surface to light (assume light is a sphere)
+    vec3 wi = glm::normalize(static_cast<const Sphere*>(light)->m_center - intersection.position);
+    // Direction from surface to camera
+    vec3 wo = glm::normalize(m_Camera.eyePos - intersection.position);
+    // Halfway vector
+    vec3 m = glm::normalize(wi + wo);
+    // Surface normal
+    vec3 N = glm::normalize(intersection.normal);
+    double denominator = 4.0 * glm::abs(glm::dot(wi, N)) * glm::abs(glm::dot(wo, N));
+    if (denominator < FLT_EPSILON)
+    {
+        return vec3(0.0, 0.0, 0.0);
+    }
+    else
+    {
+        return D(glm::dot(m,N), intersection.object->Roughness()) * G(wi, wo, m, N, intersection.object->Roughness()) * F(glm::dot(wi, m), intersection.object->Ks()) / denominator;
+    }
+}
+
+double Characteristic(double d)
+{
+    if (d > 0)
+    {
+        return 1.0;
+    }
+    else
+    {
+        return 0.0;
+    }
+}
+
+double Scene::D(double mDotN, double roughness) const
+{
+    //return Characteristic(mDotN) * ((roughness + 2.0) / (2.0 * PI)) * pow(mDotN, roughness);
+    
+    //double denom = glm::pow2(mDotN) * (glm::pow4(roughness) - 1.0) + 1.0f;
+    //return glm::pow4(roughness) / (PI * glm::pow2(denom));
+
+    // Trowbridge-Reitz GGX
+    if (mDotN > 0)
+    {
+        return glm::pow4(roughness) / (PI * glm::pow2(glm::pow2(mDotN) * (glm::pow4(roughness) - 1.0) + 1.0));
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+double tanTheta(double vDotN)
+{
+    return sqrt(1.0 - glm::pow2(vDotN)) / vDotN;
+}
+
+double G1(vec3 v, vec3 m, vec3 N, double roughness)
+{
+    /*double a = sqrt((roughness / 2.0) + 1.0) / tanTheta(glm::dot(v, N));
+    if (a < 1.6)
+    {
+        return Characteristic(glm::dot(v, m) / glm::dot(v, N)) * (3.53 * a + 2.181 * glm::pow2(a)) / (1.0 + 2.276 * a + 2.577 * glm::pow2(a));
+    }
+    else
+    {
+        return 1.0;
+    }*/
+
+    // Beckmann
+    double c = glm::dot(v, N) / (glm::pow2(roughness) * sqrt(1.0 - glm::pow2(glm::dot(v, N))));
+    if (c < 1.6)
+    {
+        return (3.535 * c + 2.181 * glm::pow2(c)) / (1.0 + 2.276 * c + 2.577 * glm::pow2(c));
+    }
+    else
+    {
+        return 1.0;
+    }
+}
+
+double Scene::G(vec3 wi, vec3 wo, vec3 m, vec3 N, double roughness) const
+{
+    return G1(wi, m, N, roughness) * G1(wo, m, N, roughness);
+}
+
+vec3 Scene::F(double vDotH, vec3 Ks) const
+{
+    // Schlick Fresnel approximation
+    return Ks + (vec3(1.0, 1.0, 1.0) - Ks) * glm::pow(1.0 - vDotH, 5.0);
+}
+
+double G1V(double nDotV, double k)
+{
+    return 1.0 / (nDotV * (1.0 - k) + k);
+
 }
 
 vec3 Scene::Lighting(const Intersection& intersection) const
@@ -375,12 +486,29 @@ vec3 Scene::Lighting(const Intersection& intersection) const
         vec3 L = glm::normalize(static_cast<Sphere*>(m_Lights[i])->m_center - intersection.position);
         vec3 V = glm::normalize(m_Camera.eyePos - intersection.position);
         vec3 H = glm::normalize(L + V);
+        
+        double nDotV = glm::saturate(glm::dot(N, V));
+        double nDotL = glm::saturate(glm::dot(N, L));
+        double lDotH = glm::saturate(glm::dot(L, H));
+        double nDotH = glm::saturate(glm::dot(N, H));
+        double vDotH = glm::saturate(glm::dot(V, H));
 
-        vec3 diffuse = m_Lights[i]->m_material.Kd * glm::max(0.0, glm::dot(N, L)) * intersection.object->m_material.Kd;
-        float temp = glm::max(0.0, glm::dot(N, H));
+        double d = D(nDotH, intersection.object->Roughness());
+        vec3 f = F(lDotH, intersection.object->Ks());
+        //double g = G1V(nDotL, glm::pow2(intersection.object->Roughness()) / 2.0) * G1V(nDotV, glm::pow2(intersection.object->Roughness()) / 2.0);
+        double g = G(L, V, H, N, intersection.object->Roughness());
+        vec3 diffuse = nDotL * intersection.object->m_material.Kd / PI;
+        double temp = glm::max(0.0, glm::dot(N, H));
         vec3 specular = m_Lights[i]->m_material.Ks * glm::pow(glm::max(0.0, glm::dot(N, H)), 5.0) * intersection.object->m_material.Ks;
         //vec3 specular = m_Lights[i]->m_material.Ks * spec * intersection.object->m_material.Ks;
-        out += diffuse + specular;
+        //out += diffuse + specular;
+        double denominator = 4.0 * glm::abs(nDotL) * glm::abs(nDotV);
+        out += diffuse;
+        if (denominator > FLT_EPSILON)
+        {
+            out += d*g*f / denominator;//Specular(m_Lights[i], intersection);
+        }
+        
     }
     return out;
 }

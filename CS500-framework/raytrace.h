@@ -18,13 +18,13 @@ public:
     { 
         m_currentMaterial.Kd = vec3(0.0, 0.0, 0.0);
         m_currentMaterial.Ks = vec3(0.0, 0.0, 0.0);
-        m_currentMaterial.alpha = 0.0;
+        m_currentMaterial.roughness = 1.0;
         m_RealTime = new Realtime(); 
     }
 
     int m_Width, m_Height;
     bool m_isRealTime = false;
-    bool m_usingBVH = false;
+    bool m_usingBVH = true;
     bool m_nextShapeIsLight = false;
     Camera m_Camera;
     Material m_currentMaterial;
@@ -34,6 +34,11 @@ public:
 
     Realtime* m_RealTime;         // Remove this (realtime stuff)
 
+    vec3 Diffuse(const Shape* light, const Intersection& intersection) const;
+    vec3 Specular(const Shape* light, const Intersection& intersection) const;
+    double D(double mDotN, double roughness) const;
+    double G(vec3 wi, vec3 wo, vec3 m, vec3 N, double roughness) const;
+    vec3 F(double d, vec3 Ks) const;
     vec3 Lighting(const Intersection& intersection) const;
 
     void PushBackShape(Shape * s);
