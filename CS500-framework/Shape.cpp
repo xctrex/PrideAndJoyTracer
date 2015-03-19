@@ -293,7 +293,7 @@ bool Cylinder::Intersect(const Ray& ray, Intersection& intersection) const
     intersection.position = ray.Eval(intersection.t);
     
     // Get the intersection normal if it's on the cap
-    if (capSlabInterval.first.t < cylinderInterval.first)
+    if (capSlabInterval.first.t > intersection.t - FLT_EPSILON && capSlabInterval.first.t < intersection.t + FLT_EPSILON)
     {
         intersection.normal = capSlabInterval.first.n;
     }
