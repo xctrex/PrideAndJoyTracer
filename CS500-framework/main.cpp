@@ -168,7 +168,4 @@ int main(int argc, char** argv)
 
     // Write the image
     WriteHdrImage(hdrName, scene->m_Width, scene->m_Height, image, 1);
-    std::string ppmName = inName;
-    ppmName.replace(ppmName.size() - 3, ppmName.size(), "ppm");
-    WritePPMImage(ppmName, scene->m_Width, scene->m_Height, image, 1);
 }

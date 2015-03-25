@@ -34,8 +34,6 @@ public:
 
     Realtime* m_RealTime;         // Remove this (realtime stuff)
 
-    vec3 Diffuse(const Shape* light, const Intersection& intersection) const;
-    vec3 Specular(const Shape* light, const Intersection& intersection) const;
     double D(double mDotN, double roughness) const;
     double G(vec3 wi, vec3 wo, vec3 m, vec3 N, double roughness) const;
     vec3 F(double d, vec3 Ks) const;
