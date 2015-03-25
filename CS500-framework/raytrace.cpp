@@ -11,7 +11,7 @@
 
 
 const double PI = 3.14159;
-
+const double indexOfRefractionAir = 1.0;
 #ifdef _WIN32
     // Includes for Windows
     #include <windows.h>
@@ -124,7 +124,7 @@ void Scene::Command(const std::string c, const std::vector<double> f, const std:
 
     else if (c == "brdf")
     {
-        // syntax: brdf  r g b   r g b  alpha
+        // syntax: brdf  Kd:r g b   Ks:r g b  roughness Kt(optional):r g b  indexOfRefraction(optional) 
         // First rgb is Diffuse reflection, second is specular reflection.
         // Creates a Material instance to be picked up by successive shapes
         if (m_isRealTime)
@@ -136,6 +136,18 @@ void Scene::Command(const std::string c, const std::vector<double> f, const std:
             m_currentMaterial.Kd = vec3(f[0], f[1], f[2]);
             m_currentMaterial.Ks = vec3(f[3], f[4], f[5]);
             m_currentMaterial.roughness = f[6];
+            m_currentMaterial.isLight = false;
+
+            if (f.size() == 11)
+            {
+                m_currentMaterial.Kt = vec3(f[7], f[8], f[9]);
+                m_currentMaterial.indexOfRefraction = f[10];
+            }
+            else
+            {
+                m_currentMaterial.Kt = vec3(0.0, 0.0, 0.0);
+                m_currentMaterial.indexOfRefraction = 0.0;
+            }
         }
     }
 
@@ -153,6 +165,7 @@ void Scene::Command(const std::string c, const std::vector<double> f, const std:
             m_currentMaterial.Kd = vec3(f[0], f[1], f[2]);
             m_currentMaterial.Ks = vec3(f[3], f[4], f[5]);
             m_currentMaterial.roughness = f[6];
+            m_currentMaterial.isLight = true;
             m_nextShapeIsLight = true;
         }
     }
@@ -276,6 +289,7 @@ void Scene::PushBackShape(Shape* s)
     s->m_material = m_currentMaterial;
     if (m_nextShapeIsLight)
     {
+        m_Objects.push_back(s);
         m_Lights.push_back(s);
         m_nextShapeIsLight = false;
     }
@@ -307,35 +321,18 @@ void Scene::TraceImage(vec3* image, const int pass)
         fprintf(stderr, "Rendering %4d\r", y);
         for (int x = 0; x < m_Width; x++)
         {
-            Ray ray = m_Camera.CalculateRayAtPixel((double)x, (double)y);
-            vec3 color;
+            Ray ray = m_Camera.CalculateRayAtPixel((double)x, (double)y);            
+            
             Intersection closestIntersection;
             closestIntersection.t = FLT_MAX;
-            if (m_usingBVH)
-            {
-                Minimizer minimizer(ray);
-                Eigen::BVMinimize(m_kdBVH, minimizer);
-                closestIntersection = minimizer.m_minimumIntersection;
-            }
-            else
-            {
-                // Brute force, compare against all objects
-                for (size_t i = 0; i < m_Objects.size(); ++i)
-                {
-                    Intersection intersection;
-                    intersection.t = FLT_MAX;
-                    m_Objects[i]->Intersect(ray, intersection);
-                    if (intersection.t < closestIntersection.t)
-                    {
-                        closestIntersection = intersection;
-                    }
-                }
-            }
             
+            CastRayInScene(ray, closestIntersection);
 
             if (closestIntersection.t < FLT_MAX - FLT_EPSILON)
             {
-                image[y*m_Width + x] = Lighting(closestIntersection);
+                // ambient
+                vec3 ambient = m_ambientColor * closestIntersection.object->m_material.Kd;
+                image[y*m_Width + x] = ambient + Lighting(m_Camera.eyePos, closestIntersection, 0);
             }
             else
             {
@@ -356,6 +353,30 @@ void Scene::TraceImage(vec3* image, const int pass)
     printf("TraceImage elapsed time: %f\n", seconds);
 }
 
+void Scene::CastRayInScene(const Ray& ray, Intersection& closestIntersection) const
+{
+    if (m_usingBVH)
+    {
+        Minimizer minimizer(ray);
+        Eigen::BVMinimize(m_kdBVH, minimizer);
+        closestIntersection = minimizer.m_minimumIntersection;
+    }
+    else
+    {
+        // Brute force, compare against all objects
+        for (size_t i = 0; i < m_Objects.size(); ++i)
+        {
+            Intersection intersection;
+            intersection.t = FLT_MAX;
+            m_Objects[i]->Intersect(ray, intersection);
+            if (intersection.t < closestIntersection.t && intersection.t > FLT_EPSILON)
+            {
+                closestIntersection = intersection;
+            }
+        }
+    }
+}
+
 double Characteristic(double d)
 {
     if (d > 0)
@@ -368,7 +389,7 @@ double Characteristic(double d)
     }
 }
 
-double Scene::D(double mDotN, double roughness) const
+double D(double mDotN, double roughness)
 {
     /*return Characteristic(mDotN) * ((roughness + 2.0) / (2.0 * PI)) * pow(mDotN, roughness);
     
@@ -415,12 +436,12 @@ double G1(vec3 v, vec3 m, vec3 N, double roughness)
     }
 }
 
-double Scene::G(vec3 wi, vec3 wo, vec3 m, vec3 N, double roughness) const
+double G(vec3 wi, vec3 wo, vec3 m, vec3 N, double roughness)
 {
     return G1(wi, m, N, roughness) * G1(wo, m, N, roughness);
 }
 
-vec3 Scene::F(double vDotH, vec3 Ks) const
+vec3 F(double vDotH, vec3 Ks)
 {
     // Schlick Fresnel approximation
     return Ks + (vec3(1.0, 1.0, 1.0) - Ks) * glm::pow(1.0 - vDotH, 5.0);
@@ -431,37 +452,117 @@ double G1V(double nDotV, double k)
     return 1.0 / (nDotV * (1.0 - k) + k);
 }
 
-vec3 Scene::Lighting(const Intersection& intersection) const
+vec3 Diffuse(vec3 L, vec3 N, vec3 Kd)
 {
-    // Emitted + ambient
-    vec3 out = m_ambientColor * intersection.object->m_material.Kd;
-    for (size_t i = 0; i < m_Lights.size(); ++i)
+    return glm::saturate(glm::dot(N, L)) * Kd / PI;
+}
+
+vec3 Specular(vec3 L, vec3 N, vec3 V, vec3 Ks, double roughness, bool isTransmissive = false)
+{
+    double nDotL = glm::saturate(glm::dot(N, L));
+    if (nDotL < 0)
     {
-        vec3 N = glm::normalize(intersection.normal);
-        vec3 L = glm::normalize(static_cast<Sphere*>(m_Lights[i])->m_center - intersection.position);
-        vec3 V = glm::normalize(m_Camera.eyePos - intersection.position);
+        //indexOfRefraction = 1.0 / indexOfRefraction;
+        nDotL *= -1.0;
+    }
+    double nDotV = glm::saturate(glm::dot(N, V));
+
+    double denominator = 4.0 * glm::abs(nDotL) * glm::abs(nDotV);
+    if (denominator > FLT_EPSILON)
+    {
         vec3 H = glm::normalize(L + V);
-        
-        double nDotV = glm::saturate(glm::dot(N, V));
-        double nDotL = glm::saturate(glm::max(glm::dot(N, L), -glm::dot(N, L)));
         double lDotH = glm::saturate(glm::dot(L, H));
         double nDotH = glm::saturate(glm::dot(N, H));
         double vDotH = glm::saturate(glm::dot(V, H));
 
-        // Diffuse
-        vec3 diffuse = intersection.object->m_material.Kd / PI;
-        out += diffuse;
-
-        // Specular
-        double denominator = 4.0 * glm::abs(nDotL) * glm::abs(nDotV);
-        if (denominator > FLT_EPSILON)
+        double d = D(nDotH, roughness);
+        vec3 f = F(vDotH, Ks);
+        if (isTransmissive)
         {
-            double d = D(nDotH, intersection.object->Roughness());
-            vec3 f = F(vDotH, intersection.object->Ks());
-            double g = G(L, V, H, N, intersection.object->Roughness());
-            out += d*g*f / denominator;
+            f = vec3(1.0, 1.0, 1.0) - f;
         }
-        
+        double g = G(L, V, H, N, roughness);
+
+        return glm::saturate(d*g*f / denominator);
     }
+    else
+    {
+        return vec3(0.0, 0.0, 0.0);
+    }
+}
+
+vec3 Scene::Lighting(const vec3 eyePos, const Intersection& intersection, int recursionLevel) const
+{
+    ++recursionLevel;
+    vec3 out(0.0, 0.0, 0.0);
+    if (recursionLevel < 4)
+    {
+        for (size_t i = 0; i < m_Lights.size(); ++i)
+        {
+            // Cast a ray towards the light to see if this position is in shadow
+            Sphere* light = static_cast<Sphere*>(m_Lights[i]);
+            vec3 L = glm::normalize(light->m_center - intersection.position);
+            vec3 N = glm::normalize(intersection.normal);
+            vec3 V = glm::normalize(eyePos - intersection.position);
+            
+            // Cast a ray towards the light
+            Ray lightRay(intersection.position, L);
+            Intersection lightIntersection;
+            lightIntersection.t = FLT_MAX;
+            CastRayInScene(lightRay, lightIntersection);
+            // If the light can actually be seen
+            if (lightIntersection.t < FLT_MAX - FLT_EPSILON && lightIntersection.object->IsLight())
+            {
+                // Calculate the standard BRDF
+                // Diffuse
+                out += Diffuse(L, N, intersection.object->Kd());
+                out += Specular(L, N, V, intersection.object->Ks(), intersection.object->Roughness());                
+            }
+            
+            // Calculate nDotV and index of refraction
+            double indexOfRefraction = indexOfRefractionAir / intersection.object->IndexOfRefraction();
+            double nDotV = glm::dot(N, V);
+            if (nDotV < 0)
+            {
+                nDotV = -nDotV;
+                indexOfRefraction = 1.0 / indexOfRefraction;
+            }
+            nDotV = glm::saturate(glm::dot(N, V));
+
+            // Cast a ray in the reflection direction
+            vec3 R = glm::normalize(2.0 * nDotV * N - V);
+            Ray reflectionRay(intersection.position, R);
+            Intersection reflectionIntersection;
+            reflectionIntersection.t = FLT_MAX;
+            CastRayInScene(reflectionRay, reflectionIntersection);
+
+            // If the ray hits an object
+            if (reflectionIntersection.t < FLT_MAX - FLT_EPSILON)
+            {
+                // Calculate light coming from the reflection direction by recursively calling the lighting function
+                out += Specular(R, N, V, intersection.object->Ks(), intersection.object->Roughness()) * Lighting(intersection.position, reflectionIntersection, recursionLevel);
+            } 
+            if (intersection.object->Kt().r + intersection.object->Kt().g + intersection.object->Kt().b > 0.0)
+            {
+                // Calculate light coming from the transmissive direction
+                // Cast a ray in the transmissive direction
+                vec3 T = glm::normalize(indexOfRefraction * nDotV - glm::sqrt(1.0 - glm::pow2(indexOfRefraction) * (1.0 - glm::pow2(nDotV))) * N - indexOfRefraction * V);
+                Ray transmissionRay(intersection.position, R);
+                Intersection transmissionIntersection;
+                transmissionIntersection.t = FLT_MAX;
+                CastRayInScene(transmissionRay, transmissionIntersection);
+
+                // If the ray hits an object
+                if (transmissionIntersection.t < FLT_MAX - FLT_EPSILON)
+                {
+                    double e = glm::e<double>();
+                    // Calculate light coming from the reflection direction by recursively calling the lighting function
+                    vec3 beersLaw = glm::pow(vec3(e, e, e), transmissionIntersection.t * glm::log(intersection.object->Kt());
+                    out += Specular(T, N, V, intersection.object->Ks(), intersection.object->Roughness()) * Lighting(intersection.position, transmissionIntersection, recursionLevel, true);
+                }
+            }
+        }
+    }
+    --recursionLevel;
     return out;
 }

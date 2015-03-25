@@ -7,8 +7,11 @@ struct Material
 {
     vec3 Kd;
     vec3 Ks;
-    double roughness;
+    vec3 Kt;
     vec3 emitted;
+    double roughness;
+    double indexOfRefraction;
+    bool isLight;
 };
 
 struct Intersection;
@@ -23,7 +26,10 @@ public:
     virtual Eigen::AlignedBox<float, 3> BoundingBox() const = 0;
     vec3 Kd() const { return m_material.Kd; }
     vec3 Ks() const { return m_material.Ks; }
+    vec3 Kt() const { return m_material.Kt; }
     double Roughness() const { return m_material.roughness; }
+    double IndexOfRefraction() const { return m_material.indexOfRefraction; }
+    bool IsLight() const { return m_material.isLight; }
     Material m_material;
 };
 

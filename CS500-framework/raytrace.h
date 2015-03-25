@@ -19,6 +19,7 @@ public:
         m_currentMaterial.Kd = vec3(0.0, 0.0, 0.0);
         m_currentMaterial.Ks = vec3(0.0, 0.0, 0.0);
         m_currentMaterial.roughness = 1.0;
+        m_currentMaterial.isLight = false;
         m_RealTime = new Realtime(); 
     }
 
@@ -37,7 +38,8 @@ public:
     double D(double mDotN, double roughness) const;
     double G(vec3 wi, vec3 wo, vec3 m, vec3 N, double roughness) const;
     vec3 F(double d, vec3 Ks) const;
-    vec3 Lighting(const Intersection& intersection) const;
+    vec3 Lighting(const vec3 eyePos, const Intersection& intersection, int recursionLevel) const;
+    void CastRayInScene(const Ray& ray, Intersection& closestIntersection) const;
 
     void PushBackShape(Shape * s);
 

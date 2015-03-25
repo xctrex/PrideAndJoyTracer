@@ -5,12 +5,12 @@ float Minimizer::minimumOnObject(Shape* obj) {
     Intersection intersection;
     if (obj->Intersect(m_ray, intersection))
     {
-        if (intersection.t < m_minimumIntersection.t)
+        if (intersection.t < m_minimumIntersection.t && intersection.t > FLT_EPSILON)
         {
             m_minimumIntersection = intersection;
         }
 
-        return intersection.t;
+        return m_minimumIntersection.t;
     }
 
     return INF;
