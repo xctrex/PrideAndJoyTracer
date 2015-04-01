@@ -314,7 +314,7 @@ void Scene::TraceImage(vec3* image, const int pass)
     
     BuildKdTree();
  
-#pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
+//#pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
     for (int y=0;  y<m_Height;  y++) 
     {
 
@@ -412,7 +412,7 @@ double tanTheta(double vDotN)
     return sqrt(1.0 - glm::pow2(vDotN)) / vDotN;
 }
 
-double G1(vec3 v, vec3 m, vec3 N, double roughness)
+double G1(double nDotV, double roughness)
 {
     /*double a = sqrt((roughness / 2.0) + 1.0) / tanTheta(glm::dot(v, N));
     if (a < 1.6)
@@ -425,7 +425,7 @@ double G1(vec3 v, vec3 m, vec3 N, double roughness)
     }*/
 
     // Beckmann
-    double c = glm::dot(v, N) / (glm::pow2(roughness) * sqrt(1.0 - glm::pow2(glm::dot(v, N))));
+    double c = nDotV / (glm::pow2(roughness) * sqrt(1.0 - glm::pow2(nDotV)));
     if (c < 1.6)
     {
         return (3.535 * c + 2.181 * glm::pow2(c)) / (1.0 + 2.276 * c + 2.577 * glm::pow2(c));
@@ -436,9 +436,9 @@ double G1(vec3 v, vec3 m, vec3 N, double roughness)
     }
 }
 
-double G(vec3 wi, vec3 wo, vec3 m, vec3 N, double roughness)
+double G(double nDotV, double nDotL, double roughness)
 {
-    return G1(wi, m, N, roughness) * G1(wo, m, N, roughness);
+    return G1(nDotV, roughness) * G1(nDotL, roughness);
 }
 
 vec3 F(double vDotH, vec3 Ks)
@@ -459,13 +459,14 @@ vec3 Diffuse(vec3 L, vec3 N, vec3 Kd)
 
 vec3 Specular(vec3 L, vec3 N, vec3 V, vec3 Ks, double roughness, bool isTransmissive = false)
 {
-    double nDotL = glm::saturate(glm::dot(N, L));
+    double nDotL = glm::dot(N, L);
+    double nDotV = glm::saturate(glm::dot(N, V));
     if (nDotL < 0)
     {
+        N = -N;
         //indexOfRefraction = 1.0 / indexOfRefraction;
-        nDotL *= -1.0;
+        nDotL = glm::saturate(glm::dot(N, L));
     }
-    double nDotV = glm::saturate(glm::dot(N, V));
 
     double denominator = 4.0 * glm::abs(nDotL) * glm::abs(nDotV);
     if (denominator > FLT_EPSILON)
@@ -481,7 +482,7 @@ vec3 Specular(vec3 L, vec3 N, vec3 V, vec3 Ks, double roughness, bool isTransmis
         {
             f = vec3(1.0, 1.0, 1.0) - f;
         }
-        double g = G(L, V, H, N, roughness);
+        double g = G(nDotV, nDotL, roughness);
 
         return glm::saturate(d*g*f / denominator);
     }
@@ -524,7 +525,7 @@ vec3 Scene::Lighting(const vec3 eyePos, const Intersection& intersection, int re
             double nDotV = glm::dot(N, V);
             if (nDotV < 0)
             {
-                nDotV = -nDotV;
+                //N = -N;
                 indexOfRefraction = 1.0 / indexOfRefraction;
             }
             nDotV = glm::saturate(glm::dot(N, V));
@@ -542,12 +543,13 @@ vec3 Scene::Lighting(const vec3 eyePos, const Intersection& intersection, int re
                 // Calculate light coming from the reflection direction by recursively calling the lighting function
                 out += Specular(R, N, V, intersection.object->Ks(), intersection.object->Roughness()) * Lighting(intersection.position, reflectionIntersection, recursionLevel);
             } 
+
             if (intersection.object->Kt().r + intersection.object->Kt().g + intersection.object->Kt().b > 0.0)
             {
                 // Calculate light coming from the transmissive direction
                 // Cast a ray in the transmissive direction
                 vec3 T = glm::normalize(indexOfRefraction * nDotV - glm::sqrt(1.0 - glm::pow2(indexOfRefraction) * (1.0 - glm::pow2(nDotV))) * N - indexOfRefraction * V);
-                Ray transmissionRay(intersection.position, R);
+                Ray transmissionRay(intersection.position, T);
                 Intersection transmissionIntersection;
                 transmissionIntersection.t = FLT_MAX;
                 CastRayInScene(transmissionRay, transmissionIntersection);
@@ -557,8 +559,10 @@ vec3 Scene::Lighting(const vec3 eyePos, const Intersection& intersection, int re
                 {
                     double e = glm::e<double>();
                     // Calculate light coming from the reflection direction by recursively calling the lighting function
-                    vec3 beersLaw = glm::pow(vec3(e, e, e), transmissionIntersection.t * glm::log(intersection.object->Kt());
-                    out += Specular(T, N, V, intersection.object->Ks(), intersection.object->Roughness()) * Lighting(intersection.position, transmissionIntersection, recursionLevel, true);
+                    vec3 beersLaw = glm::pow(vec3(e, e, e), transmissionIntersection.t * glm::log(intersection.object->Kt()));
+                    vec3 transSpec = Specular(T, N, V, intersection.object->Ks(), intersection.object->Roughness(), true);
+                    vec3 transLight = Lighting(intersection.position, transmissionIntersection, recursionLevel);
+                    out += transSpec * transLight;
                 }
             }
         }
