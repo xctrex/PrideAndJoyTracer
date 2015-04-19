@@ -20,15 +20,15 @@ bool Sphere::Intersect(const Ray& ray, Intersection& intersection) const
         double tPlus = (-b + discriminant) / (2.0 * a);
 
         // Evaluate the smallest positive t-value
-        if (tMinus < 0.0 && tPlus < 0.0)
+        if (tMinus < 0.0 + FLT_EPSILON && tPlus < 0.0 + FLT_EPSILON)
         {
             return false;
         }
-        else if (tMinus < 0.0)
+        else if (tMinus < 0.0 + FLT_EPSILON)
         {
             EvalIntersectionAtT(ray, tPlus, intersection);
         }
-        else if (tPlus < 0.0)
+        else if (tPlus < 0.0 + FLT_EPSILON)
         {
             EvalIntersectionAtT(ray, tMinus, intersection);
         }

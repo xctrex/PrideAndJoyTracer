@@ -246,6 +246,39 @@ void Scene::Command(const std::string c, const std::vector<double> f, const std:
         }
     }
 
+    // Used to switch antialiasing modes
+    else if (c == "antialiasing")
+    {
+        switch (int(f[0]))
+        {
+        case 2:
+            m_Antialiasing = Jittering;
+            m_AntialiasingN = int(f[1]);
+            break;
+        case 1:
+            m_Antialiasing = On;
+            m_AntialiasingN = int(f[1]);
+            break;
+        case 0:
+        default:
+            m_Antialiasing = Off;
+        }
+    }
+
+    // Used to be able to switch between arbitrary paths without re-compiling while debugging
+    else if (c == "arbitraryFlag")
+    {
+        m_arbitraryFlag = int(f[0]);
+    }
+
+    // Used to specify a single pixel to render (for debugging)
+    else if (c == "singlePixel")
+    {
+        m_singlePixel = true;
+        m_pixelX = int(f[0]);
+        m_pixelY = int(f[1]);
+    }
+
     else if (c == "quat")
     {
         // syntax:  quat   angle axis   angle axis   angle axis ...
@@ -313,33 +346,62 @@ void Scene::TraceImage(vec3* image, const int pass)
     QueryPerformanceCounter(&start);
     
     BuildKdTree();
- 
-//#pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
-    for (int y=0;  y<m_Height;  y++) 
+
+    if (!m_singlePixel)
     {
-
-        fprintf(stderr, "Rendering %4d\r", y);
-        for (int x = 0; x < m_Width; x++)
+#ifdef OMP_PARALLEL 
+#pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
+#endif
+        for (int y = 0; y < m_Height; y++)
         {
-            Ray ray = m_Camera.CalculateRayAtPixel((double)x, (double)y);            
-            
-            Intersection closestIntersection;
-            closestIntersection.t = FLT_MAX;
-            
-            CastRayInScene(ray, closestIntersection);
 
-            if (closestIntersection.t < FLT_MAX - FLT_EPSILON)
+            fprintf(stderr, "Rendering %4d\r", y);
+            for (int x = 0; x < m_Width; x++)
             {
-                // ambient
-                vec3 ambient = m_ambientColor * closestIntersection.object->m_material.Kd;
-                image[y*m_Width + x] = ambient + Lighting(m_Camera.eyePos, closestIntersection, 0);
-            }
-            else
-            {
-                // Black if there is no intersection with any objects
-                image[y*m_Width + x] = vec3(0.0, 0.0, 0.0);
+                if (m_Antialiasing == Off)
+                {
+                    Ray ray = m_Camera.CalculateRayAtPixel((double)x, (double)y);
+
+                    image[y*m_Width + x] = GetColor(ray);                    
+                }
+                else if (m_Antialiasing == On)
+                {
+                    vec3 colorAccumulation = vec3(0.0, 0.0, 0.0);
+                    double invAAGridNumber = 1.0 / m_AntialiasingN;
+                    for (int i = 0; i < m_AntialiasingN; ++i)
+                    {
+                        for (int j = 0; j < m_AntialiasingN; ++j)
+                        {
+                            Ray ray = m_Camera.CalculateRayAtPixel((double)x + (double)i * invAAGridNumber + invAAGridNumber / 2.0, (double)y + (double)j * invAAGridNumber + invAAGridNumber / 2.0);
+
+                            colorAccumulation += GetColor(ray);                           
+                        }
+                    }
+                    image[y*m_Width + x] = colorAccumulation / glm::pow2((double)m_AntialiasingN);
+                }
+                else if (m_Antialiasing == Jittering)
+                {
+                    vec3 colorAccumulation = vec3(0.0, 0.0, 0.0);
+                    double invAAGridNumber = 1.0 / m_AntialiasingN;
+                    for (int i = 0; i < m_AntialiasingN; ++i)
+                    {
+                        for (int j = 0; j < m_AntialiasingN; ++j)
+                        {
+                            Ray ray = m_Camera.CalculateRayAtPixel((double)x + (double)i * invAAGridNumber + U01random(prng) * invAAGridNumber, (double)y + (double)j * invAAGridNumber + U01random(prng) * invAAGridNumber);
+
+                            colorAccumulation += GetColor(ray);
+                        }
+                    }
+                    image[y*m_Width + x] = colorAccumulation / glm::pow2((double)m_AntialiasingN);
+                }
             }
         }
+    }
+    else
+    {
+        Ray ray = m_Camera.CalculateRayAtPixel((double)m_pixelX, (double)m_pixelY);
+
+        image[m_pixelY*m_Width + m_pixelX] = GetColor(ray);
     }
     fprintf(stderr, "\n");
 
@@ -351,6 +413,26 @@ void Scene::TraceImage(vec3* image, const int pass)
 
 
     printf("TraceImage elapsed time: %f\n", seconds);
+}
+
+vec3 Scene::GetColor(const Ray& ray) const
+{
+    Intersection closestIntersection;
+    closestIntersection.t = FLT_MAX;
+
+    CastRayInScene(ray, closestIntersection);
+
+    if (closestIntersection.t < FLT_MAX - FLT_EPSILON)
+    {
+        // ambient
+        vec3 ambient = m_ambientColor * closestIntersection.object->m_material.Kd;
+        return /*ambient +*/ Lighting(m_Camera.eyePos, closestIntersection, 0);
+    }
+    else
+    {
+        // Black if there is no intersection with any objects
+        return vec3(0.0, 0.0, 0.0);
+    }
 }
 
 void Scene::CastRayInScene(const Ray& ray, Intersection& closestIntersection) const
@@ -473,7 +555,12 @@ vec3 Specular(vec3 L, vec3 N, vec3 V, vec3 Ks, double roughness, bool isTransmis
     {
         vec3 H = glm::normalize(L + V);
         double lDotH = glm::saturate(glm::dot(L, H));
-        double nDotH = glm::saturate(glm::dot(N, H));
+        double nDotH = glm::dot(N, H);
+        if (nDotH < 0)
+        {
+            nDotH = glm::dot(-N, H);
+        }
+        nDotH = glm::saturate(nDotH);
         double vDotH = glm::saturate(glm::dot(V, H));
 
         double d = D(nDotH, roughness);
@@ -495,8 +582,8 @@ vec3 Specular(vec3 L, vec3 N, vec3 V, vec3 Ks, double roughness, bool isTransmis
 vec3 Scene::Lighting(const vec3 eyePos, const Intersection& intersection, int recursionLevel) const
 {
     ++recursionLevel;
-    vec3 out(0.0, 0.0, 0.0);
-    if (recursionLevel < 4)
+    vec3 out = m_ambientColor * intersection.object->Kd();
+    if (recursionLevel < 6)
     {
         for (size_t i = 0; i < m_Lights.size(); ++i)
         {
@@ -505,7 +592,7 @@ vec3 Scene::Lighting(const vec3 eyePos, const Intersection& intersection, int re
             vec3 L = glm::normalize(light->m_center - intersection.position);
             vec3 N = glm::normalize(intersection.normal);
             vec3 V = glm::normalize(eyePos - intersection.position);
-            
+
             // Cast a ray towards the light
             Ray lightRay(intersection.position, L);
             Intersection lightIntersection;
@@ -519,36 +606,29 @@ vec3 Scene::Lighting(const vec3 eyePos, const Intersection& intersection, int re
                 out += Diffuse(L, N, intersection.object->Kd());
                 out += Specular(L, N, V, intersection.object->Ks(), intersection.object->Roughness());                
             }
-            
+
             // Calculate nDotV and index of refraction
             double indexOfRefraction = indexOfRefractionAir / intersection.object->IndexOfRefraction();
             double nDotV = glm::dot(N, V);
             if (nDotV < 0)
             {
-                //N = -N;
+                N = -N;
                 indexOfRefraction = 1.0 / indexOfRefraction;
             }
             nDotV = glm::saturate(glm::dot(N, V));
 
-            // Cast a ray in the reflection direction
-            vec3 R = glm::normalize(2.0 * nDotV * N - V);
-            Ray reflectionRay(intersection.position, R);
-            Intersection reflectionIntersection;
-            reflectionIntersection.t = FLT_MAX;
-            CastRayInScene(reflectionRay, reflectionIntersection);
-
-            // If the ray hits an object
-            if (reflectionIntersection.t < FLT_MAX - FLT_EPSILON)
-            {
-                // Calculate light coming from the reflection direction by recursively calling the lighting function
-                out += Specular(R, N, V, intersection.object->Ks(), intersection.object->Roughness()) * Lighting(intersection.position, reflectionIntersection, recursionLevel);
-            } 
 
             if (intersection.object->Kt().r + intersection.object->Kt().g + intersection.object->Kt().b > 0.0)
             {
                 // Calculate light coming from the transmissive direction
                 // Cast a ray in the transmissive direction
-                vec3 T = glm::normalize(indexOfRefraction * nDotV - glm::sqrt(1.0 - glm::pow2(indexOfRefraction) * (1.0 - glm::pow2(nDotV))) * N - indexOfRefraction * V);
+                //vec3 I = -V;
+                //double nDotI = glm::dot(N, I);
+                //double squareRoot = glm::sqrt(1.0 - glm::pow2(indexOfRefraction) * (1.0 - glm::pow2(nDotI)));
+                //vec3 T = glm::normalize((indexOfRefraction * nDotI - squareRoot) * N - indexOfRefraction * I);
+                double squareRoot = glm::sqrt(1.0 - glm::pow2(indexOfRefraction) * (1.0 - glm::pow2(nDotV)));
+                vec3 T = glm::normalize((indexOfRefraction * nDotV - squareRoot) * N - indexOfRefraction * V);
+                //vec3 T = glm::normalize(indexOfRefraction * -V + (indexOfRefraction * nDotV - squareRoot) * N);
                 Ray transmissionRay(intersection.position, T);
                 Intersection transmissionIntersection;
                 transmissionIntersection.t = FLT_MAX;
@@ -561,12 +641,51 @@ vec3 Scene::Lighting(const vec3 eyePos, const Intersection& intersection, int re
                     // Calculate light coming from the reflection direction by recursively calling the lighting function
                     vec3 beersLaw = glm::pow(vec3(e, e, e), transmissionIntersection.t * glm::log(intersection.object->Kt()));
                     vec3 transSpec = Specular(T, N, V, intersection.object->Ks(), intersection.object->Roughness(), true);
+                    vec3 transSpec2 = Specular(T, N, V, intersection.object->Ks(), intersection.object->Roughness(), true);
                     vec3 transLight = Lighting(intersection.position, transmissionIntersection, recursionLevel);
-                    out += transSpec * transLight;
+                    vec3 transLight2 = Lighting(intersection.position, transmissionIntersection, recursionLevel);
+                    double nDotT = glm::dot(N, T);
+                    if (transSpec.x + transSpec.y + transSpec.z <= FLT_EPSILON)
+                    {
+                        //For debugging purposes
+                        //out += vec3(0.0, 1.0, 0.0);
+                    }
+                    if (transLight.x + transLight.y + transLight.z < FLT_EPSILON)
+                    {
+                        //For debugging purposes
+                        //out += vec3(0.0, 0.0, 1.0);
+                    }
+                    
+                    {
+                        out += beersLaw * /*transSpec */ transLight;
+                    }
+                }
+                else
+                {
+                    //For debugging purposes
+                    //out += vec3(1.0, 0.0, 0.0);
                 }
             }
+            else
+            {
+                // Cast a ray in the reflection direction
+                vec3 R = glm::normalize(2.0 * nDotV * N - V);
+                Ray reflectionRay(intersection.position, R);
+                Intersection reflectionIntersection;
+                reflectionIntersection.t = FLT_MAX;
+                CastRayInScene(reflectionRay, reflectionIntersection);
+
+                // If the ray hits an object
+                if (reflectionIntersection.t < FLT_MAX - FLT_EPSILON)
+                {
+                    // Calculate light coming from the reflection direction by recursively calling the lighting function
+                    double nDotR = glm::dot(N, R);
+                    out += nDotR * Specular(R, N, V, intersection.object->Ks(), intersection.object->Roughness()) * Lighting(intersection.position, reflectionIntersection, recursionLevel);
+                }
+            }
+
         }
     }
     --recursionLevel;
-    return out;
+    return glm::saturate(out);
 }

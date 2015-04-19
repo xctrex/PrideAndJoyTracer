@@ -10,6 +10,13 @@
 #include "Realtime.h"
 #include "Shape.h"
 
+enum Antialiasing
+{
+    Off,
+    On,
+    Jittering
+};
+
 class Scene {
 public:
 
@@ -24,12 +31,18 @@ public:
     }
 
     int m_Width, m_Height;
+    int m_arbitraryFlag = 0;
+    int m_pixelX = 0;
+    int m_pixelY = 0;
+    bool m_singlePixel = false;
     bool m_isRealTime = false;
     bool m_usingBVH = true;
     bool m_nextShapeIsLight = false;
     Camera m_Camera;
     Material m_currentMaterial;
     vec3 m_ambientColor;
+    Antialiasing m_Antialiasing = Off;
+    int m_AntialiasingN = 3;
 
     Eigen::KdBVH<float, 3, Shape*> m_kdBVH;
 
@@ -39,6 +52,7 @@ public:
     double G(vec3 wi, vec3 wo, vec3 m, vec3 N, double roughness) const;
     vec3 F(double d, vec3 Ks) const;
     vec3 Lighting(const vec3 eyePos, const Intersection& intersection, int recursionLevel) const;
+    vec3 GetColor(const Ray& ray) const;
     void CastRayInScene(const Ray& ray, Intersection& closestIntersection) const;
 
     void PushBackShape(Shape * s);
