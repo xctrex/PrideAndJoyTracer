@@ -56,7 +56,7 @@ Eigen::AlignedBox<float, 3> Sphere::BoundingBox() const
     // Top right corner
     vec3 trc = m_center + vec3(m_radius, m_radius, m_radius);    
 
-    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f(blf.x, blf.y, blf.z), Eigen::Vector3f(trc.x, trc.y, trc.z));
+    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f((float)blf.x, (float)blf.y, (float)blf.z), Eigen::Vector3f((float)trc.x, (float)trc.y, (float)trc.z));
 }
 
 bool Plane::Intersect(const Ray& ray, Intersection& intersection) const
@@ -179,7 +179,7 @@ bool Box::Intersect(const Ray& ray, Intersection& intersection) const
 
 Eigen::AlignedBox<float, 3> Box::BoundingBox() const
 {
-    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f(m_bottomLeftFloor.x, m_bottomLeftFloor.y, m_bottomLeftFloor.z), Eigen::Vector3f(m_topRightCeiling.x, m_topRightCeiling.y, m_topRightCeiling.z));
+    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f((float)m_bottomLeftFloor.x, (float)m_bottomLeftFloor.y, (float)m_bottomLeftFloor.z), Eigen::Vector3f((float)m_topRightCeiling.x, (float)m_topRightCeiling.y, (float)m_topRightCeiling.z));
 }
 
 bool Triangle::Intersect(const Ray& ray, Intersection& intersection) const
@@ -229,7 +229,7 @@ Eigen::AlignedBox<float, 3> Triangle::BoundingBox() const
     // Top right corner
     vec3 trc = vec3(glm::max(m_v0.x, m_v1.x, m_v2.x), glm::max(m_v0.y, m_v1.y, m_v2.y), glm::max(m_v0.z, m_v1.z, m_v2.z));
 
-    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f(blf.x, blf.y, blf.z), Eigen::Vector3f(trc.x, trc.y, trc.z));
+    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f((float)blf.x, (float)blf.y, (float)blf.z), Eigen::Vector3f((float)trc.x, (float)trc.y, (float)trc.z));
 }
 
 bool Cylinder::Intersect(const Ray& ray, Intersection& intersection) const
@@ -323,5 +323,5 @@ Eigen::AlignedBox<float, 3> Cylinder::BoundingBox() const
     blf -= vec3(m_radius, m_radius, m_radius);
     trc += vec3(m_radius, m_radius, m_radius);
 
-    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f(blf.x, blf.y, blf.z), Eigen::Vector3f(trc.x, trc.y, trc.z));
+    return Eigen::AlignedBox<float, 3>(Eigen::Vector3f((float)blf.x, (float)blf.y, (float)blf.z), Eigen::Vector3f((float)trc.x, (float)trc.y, (float)trc.z));
 }

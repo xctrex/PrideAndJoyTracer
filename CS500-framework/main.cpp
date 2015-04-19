@@ -42,8 +42,6 @@ void ReadScene(const std::string inName, Scene* scene)
 
     // For each line in file
     for (std::string line; getline(input, line); ) {
-        int found;
-
         // Parse the command
         std::stringstream lineStream(line);
         std::string command;
@@ -79,9 +77,10 @@ void WriteHdrImage(const std::string outName, const int width, const int height,
     rgbe_header_info info;
     char errbuf[100] = {0};
 
-    FILE* fp  =  fopen(outName.c_str(), "wb");
+    FILE* fp = _fsopen(outName.c_str(), "wb", _SH_DENYWR);
+
     info.valid = false;
-    int r = RGBE_WriteHeader(fp, width, height, &info, errbuf);
+    int r = RGBE_WriteHeader(fp, width, height, &info, errbuf, ARRAYSIZE(errbuf));
     if (r != RGBE_RETURN_SUCCESS)
         printf("error: %s\n", errbuf);
 
@@ -90,9 +89,9 @@ void WriteHdrImage(const std::string outName, const int width, const int height,
     for (int y=height-1;  y>=0;  --y) {
         for (int x=0;  x<width;  ++x) {
             vec3 pixel = image[y*width + x];
-            *dp++ = pixel[0]*(scale/pass);
-            *dp++ = pixel[1]*(scale/pass);
-            *dp++ = pixel[2]*(scale/pass); } }
+            *dp++ = (float)pixel[0]*(scale/pass);
+            *dp++ = (float)pixel[1]*(scale/pass);
+            *dp++ = (float)pixel[2]*(scale/pass); } }
 
     r = RGBE_WritePixels_RLE(fp, data, width,  height, errbuf);
     if (r != RGBE_RETURN_SUCCESS)
@@ -119,7 +118,7 @@ void WritePPMImage(const std::string outName, const int width, const int height,
     unsigned char* ptr = bytes;
 
     // Open file
-    f  =  fopen(outName.c_str(), "wb");
+    errno_t err = fopen_s(&f, outName.c_str(), "wb");
 
     // Write file header
     fprintf(f, "P6\n%d %d\n%d\n", width, height, 65535);
@@ -164,7 +163,7 @@ int main(int argc, char** argv)
             image[y*scene->m_Width + x] = vec3(0,0,0);
 
     // PathTrace the image
-    scene->PathTraceImage(image, 1);
+    scene->RayTraceImage(image, 1);
 
     // Write the image
     WriteHdrImage(hdrName, scene->m_Width, scene->m_Height, image, 1);

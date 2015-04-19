@@ -10,7 +10,7 @@ float Minimizer::minimumOnObject(Shape* obj) {
             m_minimumIntersection = intersection;
         }
 
-        return m_minimumIntersection.t;
+        return (float)m_minimumIntersection.t;
     }
 
     return INF;
@@ -25,7 +25,7 @@ float Minimizer::minimumOnVolume(const Eigen::AlignedBox<float, 3>& box)
     Intersection intersection;
     if (b.Intersect(m_ray, intersection))
     {
-        return intersection.t;
+        return (float)intersection.t;
     }
 
     return INF;

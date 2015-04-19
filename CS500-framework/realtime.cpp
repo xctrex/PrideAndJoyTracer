@@ -171,7 +171,7 @@ void Mesh::MakeVAO()
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int)*tris->size(),
                  &(*tris)[0], GL_STATIC_DRAW);
 
-    count = tris->size()/3;
+    count = (int)tris->size()/3;
 
     glBindVertexArray(0);
 
@@ -304,7 +304,7 @@ void Realtime::DrawScene()
 
     glm::vec3 lightEmit[8];
     glm::vec3 lightPosn[8];
-    int  lightNum = lights.size();
+    int  lightNum = (int)lights.size();
     for (int i=0;  i<lightNum;  i++) {
         lightPosn[i] = lights[i]->center();
         lightEmit[i] = lights[i]->material->Kd; }

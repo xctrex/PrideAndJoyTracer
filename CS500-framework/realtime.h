@@ -36,7 +36,7 @@ public:
         std::ifstream f;
         f.open(fname, std::ios_base::binary); // Open
         f.seekg(0, std::ios_base::end);       // Position at end
-        int length = f.tellg();               // to get the length
+        int length = (int)f.tellg();               // to get the length
 
         char* src = new char [length+1];  // Create buffer of needed length
         f.seekg (0, std::ios_base::beg);      // Position at beginning
