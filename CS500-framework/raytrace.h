@@ -54,7 +54,6 @@ public:
     double G(vec3 wi, vec3 wo, vec3 m, vec3 N, double roughness) const;
     vec3 F(double d, vec3 Ks) const;
     vec3 Lighting(const vec3 eyePos, const Intersection& intersection, int recursionLevel) const;
-    vec3 GetColor(const Ray& ray) const;
     void CastRayInScene(const Ray& ray, Intersection& closestIntersection) const;
 
     void PushBackShape(Shape * s);
@@ -85,7 +84,10 @@ public:
 
     // The main program will call the TraceImage method to generate
     // and return the image.  This is the Ray Tracer!
-    void TraceImage(vec3* image, const int pass);
+    void RayTraceImage(vec3* image, const int pass);
+    vec3 RayTrace(const Ray& ray) const;
+    void PathTraceImage(vec3* image, const int pass);
+    vec3 PathTrace(const Ray& ray) const;
 
     std::vector<Shape*> m_Objects;
     std::vector<Shape*> m_Lights;

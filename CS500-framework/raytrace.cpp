@@ -324,7 +324,7 @@ void Scene::BuildKdTree()
     m_kdBVH = Eigen::KdBVH<float, 3, Shape*>(m_Objects.begin(), m_Objects.end());
 }
 
-void Scene::TraceImage(vec3* image, const int pass)
+void Scene::RayTraceImage(vec3* image, const int pass)
 {
     m_Timer.Start();
     
@@ -345,7 +345,7 @@ void Scene::TraceImage(vec3* image, const int pass)
                 {
                     Ray ray = m_Camera.CalculateRayAtPixel((double)x, (double)y);
 
-                    image[y*m_Width + x] = GetColor(ray);                    
+                    image[y*m_Width + x] = RayTrace(ray);
                 }
                 else if (m_Antialiasing == On)
                 {
@@ -357,7 +357,7 @@ void Scene::TraceImage(vec3* image, const int pass)
                         {
                             Ray ray = m_Camera.CalculateRayAtPixel((double)x + (double)i * invAAGridNumber + invAAGridNumber / 2.0, (double)y + (double)j * invAAGridNumber + invAAGridNumber / 2.0);
 
-                            colorAccumulation += GetColor(ray);                           
+                            colorAccumulation += RayTrace(ray);
                         }
                     }
                     image[y*m_Width + x] = colorAccumulation / glm::pow2((double)m_AntialiasingN);
@@ -372,7 +372,7 @@ void Scene::TraceImage(vec3* image, const int pass)
                         {
                             Ray ray = m_Camera.CalculateRayAtPixel((double)x + (double)i * invAAGridNumber + U01random(prng) * invAAGridNumber, (double)y + (double)j * invAAGridNumber + U01random(prng) * invAAGridNumber);
 
-                            colorAccumulation += GetColor(ray);
+                            colorAccumulation += RayTrace(ray);
                         }
                     }
                     image[y*m_Width + x] = colorAccumulation / glm::pow2((double)m_AntialiasingN);
@@ -384,18 +384,49 @@ void Scene::TraceImage(vec3* image, const int pass)
     {
         Ray ray = m_Camera.CalculateRayAtPixel((double)m_pixelX, (double)m_pixelY);
 
-        image[m_pixelY*m_Width + m_pixelX] = GetColor(ray);
+        image[m_pixelY*m_Width + m_pixelX] = RayTrace(ray);
     }
     fprintf(stderr, "\n");
 
-    // Get the end time
-    LARGE_INTEGER end;
-
-
-    printf("TraceImage elapsed time: %f\n", m_Timer.Stop());
+    // Stop the timer and output the total elapsed time
+    printf("RayTraceImage elapsed time: %f\n", m_Timer.Stop());
 }
 
-vec3 Scene::GetColor(const Ray& ray) const
+void Scene::PathTraceImage(vec3* image, const int pass)
+{
+    m_Timer.Start();
+
+    BuildKdTree();
+
+    if (!m_singlePixel)
+    {
+#ifdef OMP_PARALLEL 
+#pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
+#endif
+        for (int y = 0; y < m_Height; y++)
+        {
+            fprintf(stderr, "Rendering %4d\r", y);
+            for (int x = 0; x < m_Width; x++)
+            {
+                Ray ray = m_Camera.CalculateRayAtPixel((double)x, (double)y);
+
+                image[y*m_Width + x] = PathTrace(ray);
+            }
+        }
+    }
+    else
+    {
+        Ray ray = m_Camera.CalculateRayAtPixel((double)m_pixelX, (double)m_pixelY);
+
+        image[m_pixelY*m_Width + m_pixelX] = PathTrace(ray);
+    }
+    fprintf(stderr, "\n");
+    
+    // Stop the timer and output the total elapsed time
+    printf("PathTraceImage elapsed time: %f\n", m_Timer.Stop());
+}
+
+vec3 Scene::RayTrace(const Ray& ray) const
 {
     Intersection closestIntersection;
     closestIntersection.t = FLT_MAX;
@@ -413,6 +444,32 @@ vec3 Scene::GetColor(const Ray& ray) const
         // Black if there is no intersection with any objects
         return vec3(0.0, 0.0, 0.0);
     }
+}
+
+vec3 Scene::PathTrace(const Ray& ray) const
+{
+    vec3 AccumulatedColor(0.0, 0.0, 0.0);
+    vec3 AccumalatedImportanceWeight(1.0, 1.0, 1.0);
+
+    Intersection closestIntersection;
+    closestIntersection.t = FLT_MAX;
+
+    CastRayInScene(ray, closestIntersection);
+
+    if (closestIntersection.t > FLT_MAX - FLT_EPSILON)
+    {
+        // Black if there is no intersection with any objects
+        return vec3(0.0, 0.0, 0.0);
+    }
+
+    if (closestIntersection.object->IsLight())
+    {
+        // Return the radiance of the light if a light was hit
+        return closestIntersection.object->Kd();
+    }
+    
+    vec3 wo = -ray.GetR();
+    return wo;
 }
 
 void Scene::CastRayInScene(const Ray& ray, Intersection& closestIntersection) const

@@ -19,6 +19,8 @@ public:
         return Q + t * R;
     }
 
+    vec3 GetR() const{ return R; }
+
     vec3 Q;
     vec3 R;
 };
