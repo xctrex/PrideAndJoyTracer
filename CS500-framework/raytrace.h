@@ -9,6 +9,7 @@
 #include "Camera.h"
 #include "Realtime.h"
 #include "Shape.h"
+#include "Timer.h"
 
 enum Antialiasing
 {
@@ -43,6 +44,7 @@ public:
     vec3 m_ambientColor;
     Antialiasing m_Antialiasing = Off;
     int m_AntialiasingN = 3;
+    Timer m_Timer;
 
     Eigen::KdBVH<float, 3, Shape*> m_kdBVH;
 

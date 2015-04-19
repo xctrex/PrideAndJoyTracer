@@ -1,5 +1,17 @@
 #pragma once
 
+#ifdef _WIN32
+// Includes for Windows
+#include <windows.h>
+#include <cstdlib>
+#include <limits>
+#include <crtdbg.h>
+#else
+// Includes for Linux
+#include <stdlib.h>
+double abs(double v) { return v>0 ? v : -v; }
+#endif
+
 // The vec* types are vectors of DOUBLES, since most raytracing
 // calculations should be done with doubles.
 #define GLM_FORCE_RADIANS

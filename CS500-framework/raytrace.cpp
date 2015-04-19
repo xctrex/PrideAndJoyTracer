@@ -7,22 +7,9 @@
 #include <string>
 #include <fstream>
 #include <vector>
-#include <time.h>
-
 
 const double PI = 3.14159;
 const double indexOfRefractionAir = 1.0;
-#ifdef _WIN32
-    // Includes for Windows
-    #include <windows.h>
-    #include <cstdlib>
-    #include <limits>
-    #include <crtdbg.h>
-#else
-    // Includes for Linux
-    #include <stdlib.h>
-    double abs(double v) { return v>0 ? v : -v; }
-#endif
 
 // A good quality *thread-safe* Mersenne Twister random number generator.
 #include <random>
@@ -339,11 +326,7 @@ void Scene::BuildKdTree()
 
 void Scene::TraceImage(vec3* image, const int pass)
 {
-    LARGE_INTEGER ticksPerSecond;
-    QueryPerformanceFrequency(&ticksPerSecond);
-    // Set the start time
-    LARGE_INTEGER start;
-    QueryPerformanceCounter(&start);
+    m_Timer.Start();
     
     BuildKdTree();
 
@@ -407,12 +390,9 @@ void Scene::TraceImage(vec3* image, const int pass)
 
     // Get the end time
     LARGE_INTEGER end;
-    QueryPerformanceCounter(&end);
-    // get the difference between the current time and the start time
-    float seconds = (float)(end.QuadPart - start.QuadPart) / (float)(ticksPerSecond.QuadPart);
 
 
-    printf("TraceImage elapsed time: %f\n", seconds);
+    printf("TraceImage elapsed time: %f\n", m_Timer.Stop());
 }
 
 vec3 Scene::GetColor(const Ray& ray) const
