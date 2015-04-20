@@ -89,6 +89,11 @@ public:
     void PathTraceImage(vec3* image, const int pass);
     vec3 PathTrace(const Ray& ray) const;
 
+    // Sample a random point on a random light
+    bool SampleLight(const vec3 position, Intersection &intersection) const;
+    // Returns probability that a light is chosen
+    float PDFLight() const;
+
     std::vector<Shape*> m_Objects;
     std::vector<Shape*> m_Lights;
 };

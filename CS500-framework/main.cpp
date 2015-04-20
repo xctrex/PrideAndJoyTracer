@@ -163,7 +163,7 @@ int main(int argc, char** argv)
             image[y*scene->m_Width + x] = vec3(0,0,0);
 
     // PathTrace the image
-    scene->RayTraceImage(image, 1);
+    scene->PathTraceImage(image, 1);
 
     // Write the image
     WriteHdrImage(hdrName, scene->m_Width, scene->m_Height, image, 1);

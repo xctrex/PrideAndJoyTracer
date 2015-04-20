@@ -14,7 +14,7 @@ struct Material
     bool isLight;
 };
 
-struct Intersection;
+class Intersection;
 
 class Shape
 {
@@ -180,10 +180,14 @@ public:
     vec3 m_v2;
 };
 
-struct Intersection
+class Intersection
 {
-    double t;
+public:
+    Intersection(){};
+    bool IsValid() const { return t < FLT_MAX - FLT_EPSILON; }
+    double t = FLT_MAX;
     vec3 normal;
     vec3 position;
     const Shape *object;
 };
+

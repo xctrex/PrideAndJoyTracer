@@ -469,8 +469,59 @@ vec3 Scene::PathTrace(const Ray& ray) const
     }
     
     vec3 wo = -ray.GetR();
+
+    // Start with hard coded 10 passes per ray
+    // TODO: update this to russian roulette
+    for (int roulette = 0; roulette < 10; ++roulette)
+    {
+        /*// Compute explicite side branch to a random light
+        // TODO: sample a random point on the light
+        Intersection lightSample;
+        SampleLight(closestIntersection.position, lightSample);
+        assert(lightSample.IsValid());
+        float lightProbability = PDFLight();
+
+        // Get the direction to the light sample
+        vec3 wi = lightSample.position - closestIntersection.position;
+        
+        // See if light is visible from intersection point
+        Intersection shadowIntersection;
+        CastRayInScene(Ray(closestIntersection.position, wi), shadowIntersection);
+        if (shadowIntersection.object == lightSample.object)
+        {
+            // The light was hit
+        }*/
+    }
     return wo;
 }
+
+bool Scene::SampleLight(const vec3 position, Intersection &intersection) const
+{
+    assert(m_Lights.size() > 0);
+
+    // Pick a random light
+    size_t randomLightIndex = m_Lights.size();
+
+    // Use a loop to handle the extremely rare case that U01random returns 1.0, causing index to be equal to size (and thus out of bounds).
+    while (randomLightIndex == m_Lights.size())
+    {
+        randomLightIndex = (size_t)(U01random(prng) * (double)m_Lights.size());
+    }
+
+    // Return the center of the bounding box of the light
+    // TODO: sample a random point on the light
+    // TODO: handle variety of light shapes
+    return m_Lights[randomLightIndex]->Intersect(Ray(position, static_cast<Sphere*>(m_Lights[randomLightIndex])->m_center), intersection);
+}
+
+float Scene::PDFLight() const
+{
+    assert(m_Lights.size() > 0);
+
+    // TODO: update when we sample points on lights instead of always choosing the center
+    return 1.0f / (float)m_Lights.size();
+}
+
 
 void Scene::CastRayInScene(const Ray& ray, Intersection& closestIntersection) const
 {
