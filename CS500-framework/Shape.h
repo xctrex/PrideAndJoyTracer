@@ -185,6 +185,9 @@ class Intersection
 public:
     Intersection(){};
     bool IsValid() const { return t < FLT_MAX - FLT_EPSILON; }
+    vec3 SampleBRDF(const vec3 wo) const;
+    double PDFBRDF(const vec3 wo, const vec3 wi) const;
+    vec3 EvaluateBRDF(const vec3 wo, const vec3 wi) const;
     double t = FLT_MAX;
     vec3 normal;
     vec3 position;

@@ -490,9 +490,43 @@ vec3 Scene::PathTrace(const Ray& ray) const
         if (shadowIntersection.object == lightSample.object)
         {
             // The light was hit
+            double geometryFactor = GeometryFactor(closestIntersection, lightSample);
         }*/
+
+        // Extend path
+        vec3 wi = closestIntersection.SampleBRDF(wo);
+
+        Intersection Q;
+        CastRayInScene(Ray(closestIntersection.position, wi), Q);
+        if (!Q.IsValid())
+        {
+            break;
+        }
+
+        double probability = closestIntersection.PDFBRDF(wo, wi);
+        if (probability < 0.000001 || probability == DBL_MAX)
+        {
+            break;
+        }
+
+        vec3 f = closestIntersection.EvaluateBRDF(wo, wi);
+
+        AccumalatedImportanceWeight = AccumalatedImportanceWeight * f / probability;
+
+        probability = probability * GeometryFactor(closestIntersection, Q);
+        closestIntersection = Q;
+        wo = -wi;
+
+        // Has path hit a light (accidentally)
+        if (closestIntersection.object->IsLight())
+        {
+            //double q = PDFLight();
+            //double wMIS = glm::pow2(probability) / (glm::pow2(q) + glm::pow2(probability));
+            AccumulatedColor += closestIntersection.object->Kd() * AccumalatedImportanceWeight; // *wMIS; // Accumulate light times importance
+            break; //Don't extend path further
+        }
     }
-    return wo;
+    return AccumulatedColor;
 }
 
 bool Scene::SampleLight(const vec3 position, Intersection &intersection) const
@@ -522,6 +556,47 @@ float Scene::PDFLight() const
     return 1.0f / (float)m_Lights.size();
 }
 
+double GeometryFactor(const Intersection &a, const Intersection &b)
+{
+    vec3 d = a.position - b.position;
+
+    return glm::abs(glm::dot(a.normal, d)) * glm::abs(glm::dot(b.normal, d)) / (glm::pow2(glm::dot(d, d)));
+}
+
+// Quat to rotate a to b
+quat quatA2B(const vec3 a, const vec3 b)
+{
+    // Axis around which to rotate
+    vec3 rotationAxis = glm::cross(a, b);
+
+    // If a is parallel to b
+    if (glm::l2Norm(rotationAxis) < FLT_EPSILON)
+    {
+        if (glm::dot(a, b) > 0.0)
+        {
+            // Return Identity rotation
+            return quat(1.0, 0.0, 0.0, 0.0);
+        }
+        else
+        {
+            // Return 180 degree rotation
+            return quat(0.0, 1.0, 0.0, 0.0);
+        }
+    }
+    else
+    {
+        return glm::angleAxis(glm::acos(glm::dot(a, b) / glm::l2Norm(a) * glm::l2Norm(b)), glm::normalize(rotationAxis));
+    }
+}
+
+vec3 SampleCone(const vec3 v, double cosTheta, double phi)
+{
+    double sinTheta = glm::sqrt(1.0 - glm::pow2(cosTheta));
+    vec3 k(sinTheta * glm::cos(phi), sinTheta * glm::sin(phi), cosTheta); // Vector centered on Z
+    quat zToV = quatA2B(vec3(0.0, 0.0, 1.0), v);
+
+    return glm::rotate(zToV, k);
+}
 
 void Scene::CastRayInScene(const Ray& ray, Intersection& closestIntersection) const
 {

@@ -97,3 +97,9 @@ public:
     std::vector<Shape*> m_Objects;
     std::vector<Shape*> m_Lights;
 };
+
+
+// Calculates the effect of light leaving one point and stringing another point
+double GeometryFactor(const Intersection &a, const Intersection &b);
+// Samples a cone of random vectors around V
+vec3 SampleCone(const vec3 v, double cosTheta, double phi);

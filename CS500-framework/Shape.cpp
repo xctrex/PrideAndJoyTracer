@@ -6,6 +6,22 @@ Eigen::AlignedBox<float, 3> bounding_box(const Shape* obj)
     return obj->BoundingBox();
 }
 
+
+vec3 Intersection::SampleBRDF(const vec3 wo) const
+{
+    return vec3(0.0, 0.0, 0.0);
+}
+
+double Intersection::PDFBRDF(const vec3 wo, const vec3 wi) const
+{
+    return 1.0;
+}
+
+vec3 Intersection::EvaluateBRDF(const vec3 wo, const vec3 wi) const
+{
+    return vec3(0.0, 0.0, 0.0);
+}
+
 bool Sphere::Intersect(const Ray& ray, Intersection& intersection) const
 {
     vec3 D = ray.Q - m_center;
