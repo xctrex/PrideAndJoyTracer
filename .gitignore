@@ -9,6 +9,7 @@
 *.idb
 *.pdb
 *.ipch
+*.hdr
 
 # Windows image file caches
 Thumbs.db
