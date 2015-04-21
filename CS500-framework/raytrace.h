@@ -86,7 +86,7 @@ public:
     // and return the image.  This is the Ray Tracer!
     void RayTraceImage(vec3* image, const int pass);
     vec3 RayTrace(const Ray& ray) const;
-    void PathTraceImage(vec3* image, const int pass);
+    void PathTraceImage(const std::string, vec3* image, const int pass);
     vec3 PathTrace(const Ray& ray, double no) const;
 
     // Sample a random point on a random light

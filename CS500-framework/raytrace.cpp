@@ -14,6 +14,7 @@ static const double indexOfRefractionAir = 1.0;
 #include "realtime.h"
 #include "Shape.h"
 #include "Minimizer.h"
+#include "WriteImage.h"
 
 
 // A good quality *thread-safe* Mersenne Twister random number generator.
@@ -392,7 +393,7 @@ void Scene::RayTraceImage(vec3* image, const int pass)
     printf("RayTraceImage elapsed time: %f\n", m_Timer.Stop());
 }
 
-void Scene::PathTraceImage(vec3* image, const int pass)
+void Scene::PathTraceImage(const std::string hdrName, vec3* image, const int pass)
 {
     m_Timer.Start();
 
@@ -400,25 +401,35 @@ void Scene::PathTraceImage(vec3* image, const int pass)
 
     if (!m_singlePixel)
     {
+        for (int i = 1; i <= pass; ++i)
+        {
+            fprintf(stderr, "Pass %4d\r\n", i);
 #ifdef OMP_PARALLEL 
 #pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
 #endif
-        for (int y = 0; y < m_Height; y++)
-        {
-            fprintf(stderr, "Rendering %4d\r", y);
-            for (int x = 0; x < m_Width; x++)
+            for (int y = 0; y < m_Height; y++)
             {
-                Ray ray = m_Camera.CalculateRayAtPixel((double)x, (double)y);
+                fprintf(stderr, "Rendering %4d\r", y);
+                for (int x = 0; x < m_Width; x++)
+                {
+                    Ray ray = m_Camera.CalculateRayAtPixel((double)x, (double)y);
 
-                image[y*m_Width + x] = PathTrace(ray, indexOfRefractionAir);
+                    image[y*m_Width + x] += PathTrace(ray, indexOfRefractionAir);
+                }
             }
+
+            // Write the image
+            WriteHdrImage(hdrName, m_Width, m_Height, image, i);
         }
     }
     else
     {
-        Ray ray = m_Camera.CalculateRayAtPixel((double)m_pixelX, (double)m_pixelY);
+        for (int i = 1; i <= pass; ++i)
+        {
+            Ray ray = m_Camera.CalculateRayAtPixel((double)m_pixelX, (double)m_pixelY);
 
-        image[m_pixelY*m_Width + m_pixelX] = PathTrace(ray, indexOfRefractionAir);
+            image[m_pixelY*m_Width + m_pixelX] += PathTrace(ray, indexOfRefractionAir);
+        }
     }
     fprintf(stderr, "\n");
     
@@ -462,6 +473,8 @@ vec3 Scene::PathTrace(const Ray& ray, double no) const
         return vec3(0.0, 0.0, 0.0);
     }
 
+    closestIntersection.CalculateProbabilities();
+
     if (closestIntersection.object->IsLight())
     {
         // Return the radiance of the light if a light was hit
@@ -474,12 +487,12 @@ vec3 Scene::PathTrace(const Ray& ray, double no) const
     // TODO: update this to russian roulette
     for (int roulette = 0; roulette < 10; ++roulette)
     {
-        /*// Compute explicite side branch to a random light
+        // Compute explicite side branch to a random light
         // TODO: sample a random point on the light
-        Intersection lightSample;
+        /*Intersection lightSample;
         SampleLight(closestIntersection.position, lightSample);
         assert(lightSample.IsValid());
-        float lightProbability = PDFLight(staic_cast<Sphere*>(lightSample.object)->m_radius);
+        float lightProbability = PDFLight(static_cast<const Sphere*>(lightSample.object)->m_radius);
 
         // Get the direction to the light sample
         vec3 wi = lightSample.position - closestIntersection.position;
@@ -491,14 +504,12 @@ vec3 Scene::PathTrace(const Ray& ray, double no) const
         {
             // The light was hit
             double geometryFactor = GeometryFactor(closestIntersection, lightSample);
-        }*/
-
+        }
+        */
         // Extend path
         vec3 wi;
         RadiationType radiationType;
-        closestIntersection.SampleBRDF(wo, wi, radiationType);
-
-        
+        closestIntersection.SampleBRDF(wo, wi, radiationType);        
 
         Intersection Q;
         CastRayInScene(Ray(closestIntersection.position, wi), Q);
@@ -506,6 +517,7 @@ vec3 Scene::PathTrace(const Ray& ray, double no) const
         {
             break;
         }
+        Q.CalculateProbabilities();
 
         double probability = closestIntersection.PDFBRDF(wo, wi);
         if (probability < 0.000001 || probability == DBL_MAX)

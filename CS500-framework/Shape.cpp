@@ -63,6 +63,9 @@ double signX(double x)
 }
 
 Intersection::Intersection()
+{}
+
+void Intersection::CalculateProbabilities()
 {
     // Calculate probabilities for choosing diffuse, reflection, or transmission
     double s = glm::l2Norm(Kd()) + glm::l2Norm(Ks()) + glm::l2Norm(Kd());

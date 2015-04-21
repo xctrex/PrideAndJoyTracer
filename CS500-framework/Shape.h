@@ -200,6 +200,7 @@ public:
     void SampleBRDF(const vec3 wo, vec3 &wi, RadiationType &type) const;
     double PDFBRDF(const vec3 wo, const vec3 wi) const;
     vec3 EvaluateBRDF(const vec3 wo, const vec3 wi) const;
+    void CalculateProbabilities();
     vec3 Kd() const { return object->Kd(); }
     vec3 Ks() const { return object->Ks(); }
     vec3 Kt() const { return object->Kt(); }

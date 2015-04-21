@@ -33,6 +33,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Timer.cpp" />
+    <ClCompile Include="WriteImage.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
@@ -43,6 +44,7 @@
     <ClInclude Include="Shape.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="Timer.h" />
+    <ClInclude Include="WriteImage.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{36EBE891-B28C-4136-9A42-45E04DD95342}</ProjectGuid>
