@@ -15,8 +15,7 @@
 #include "raytrace.h"
 #include "realtime.h"
 
-const float PI = 3.14159f;
-const float rad = PI/180.0f;    // Convert degrees to radians
+const float rad = (float)PI/180.0f;    // Convert degrees to radians
 
 #define PUSH4(v, a,b,c,d) { v->push_back(a); v->push_back(b); v->push_back(c); v->push_back(d); }
 #define PUSH3(v, a,b,c) { v->push_back(a); v->push_back(b); v->push_back(c); }
@@ -42,17 +41,17 @@ Mesh* SphMesh()
 {
     Mesh* mesh = new Mesh();
     unsigned int n = 20;
-    float d = 2.0f*PI/float(n*2);
+    float d = 2.0f*(float)PI / float(n * 2);
     for (unsigned int i=0;  i<=n*2;  i++) {
-        float s = i*2.0f*PI/float(n*2);
+        float s = i*2.0f*(float)PI / float(n * 2);
         for (unsigned int j=0;  j<=n;  j++) {
-            float t = j*PI/float(n);
+            float t = j*(float)PI / float(n);
             float x = cos(s)*sin(t);
             float y = sin(s)*sin(t);
             float z = cos(t);
             PUSH4(mesh->pnt, x,y,z,1.0f);
             PUSH3(mesh->nrm, x,y,z);
-            PUSH2(mesh->tex, s/(2*PI), t/PI);
+            PUSH2(mesh->tex, s / (2 * (float)PI), t / (float)PI);
             PUSH3(mesh->tan, -sin(s), cos(s), 0.0);
             if (i>0 && j>0) {
               PUSH3(mesh->tris, (i-1)*(n+1) + (j-1), (i-1)*(n+1) + (j  ), (i  )*(n+1) + (j  ));
@@ -96,22 +95,22 @@ Mesh* CylMesh()
 {
     Mesh* mesh = new Mesh();
     unsigned int n = 20;
-    float d = 2.0f*PI/float(n*2);
+    float d = 2.0f*(float)PI / float(n * 2);
     for (unsigned int i=0;  i<=n;  i++) {
-        float s = i*2.0f*PI/float(n);
+        float s = i*2.0f*(float)PI / float(n);
         float x = cos(s);
         float y = sin(s);
         
         float z = 0.0f;
         PUSH4(mesh->pnt, x,y,z,1.0f);
         PUSH3(mesh->nrm, x,y,0.0f);
-        PUSH2(mesh->tex, s/(2*PI), 0.0f);
+        PUSH2(mesh->tex, s / (2 * (float)PI), 0.0f);
         PUSH3(mesh->tan, -sin(s), cos(s), 0.0f);
 
         z = 1.0f;
         PUSH4(mesh->pnt, x,y,z,1.0f);
         PUSH3(mesh->nrm, x,y,0.0f);
-        PUSH2(mesh->tex, s/(2*PI), 0.0f);
+        PUSH2(mesh->tex, s / (2 * (float)PI), 0.0f);
         PUSH3(mesh->tan, -sin(s), cos(s), 0.0f);
 
         if (i>0) {

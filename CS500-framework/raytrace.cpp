@@ -8,19 +8,19 @@
 #include <fstream>
 #include <vector>
 
-const double PI = 3.14159;
-const double indexOfRefractionAir = 1.0;
-
-// A good quality *thread-safe* Mersenne Twister random number generator.
-#include <random>
-std::mt19937_64 prng;
-std::uniform_real_distribution<> U01random(0.0, 1.0);
-// Call U01random(prng) to get a uniformly distributed random number in [0,1].
+static const double indexOfRefractionAir = 1.0;
 
 #include "raytrace.h"
 #include "realtime.h"
 #include "Shape.h"
 #include "Minimizer.h"
+
+
+// A good quality *thread-safe* Mersenne Twister random number generator.
+#include <random>
+static std::mt19937_64 prng;
+static std::uniform_real_distribution<> U01random(0.0, 1.0);
+// Call U01random(prng) to get a uniformly distributed random number in [0,1].
 
 void Scene::createRealtimeMaterial() { m_RealTime->createRealtimeMaterial(); }
 void Scene::setTexture(const std::string path) { m_RealTime->setTexture(path); }
@@ -410,7 +410,7 @@ void Scene::PathTraceImage(vec3* image, const int pass)
             {
                 Ray ray = m_Camera.CalculateRayAtPixel((double)x, (double)y);
 
-                image[y*m_Width + x] = PathTrace(ray);
+                image[y*m_Width + x] = PathTrace(ray, indexOfRefractionAir);
             }
         }
     }
@@ -418,7 +418,7 @@ void Scene::PathTraceImage(vec3* image, const int pass)
     {
         Ray ray = m_Camera.CalculateRayAtPixel((double)m_pixelX, (double)m_pixelY);
 
-        image[m_pixelY*m_Width + m_pixelX] = PathTrace(ray);
+        image[m_pixelY*m_Width + m_pixelX] = PathTrace(ray, indexOfRefractionAir);
     }
     fprintf(stderr, "\n");
     
@@ -446,7 +446,7 @@ vec3 Scene::RayTrace(const Ray& ray) const
     }
 }
 
-vec3 Scene::PathTrace(const Ray& ray) const
+vec3 Scene::PathTrace(const Ray& ray, double no) const
 {
     vec3 AccumulatedColor(0.0, 0.0, 0.0);
     vec3 AccumalatedImportanceWeight(1.0, 1.0, 1.0);
@@ -469,7 +469,7 @@ vec3 Scene::PathTrace(const Ray& ray) const
     }
     
     vec3 wo = -ray.GetR();
-
+    //no = indexOfRefractionAir;
     // Start with hard coded 10 passes per ray
     // TODO: update this to russian roulette
     for (int roulette = 0; roulette < 10; ++roulette)
@@ -479,7 +479,7 @@ vec3 Scene::PathTrace(const Ray& ray) const
         Intersection lightSample;
         SampleLight(closestIntersection.position, lightSample);
         assert(lightSample.IsValid());
-        float lightProbability = PDFLight();
+        float lightProbability = PDFLight(staic_cast<Sphere*>(lightSample.object)->m_radius);
 
         // Get the direction to the light sample
         vec3 wi = lightSample.position - closestIntersection.position;
@@ -494,7 +494,11 @@ vec3 Scene::PathTrace(const Ray& ray) const
         }*/
 
         // Extend path
-        vec3 wi = closestIntersection.SampleBRDF(wo);
+        vec3 wi;
+        RadiationType radiationType;
+        closestIntersection.SampleBRDF(wo, wi, radiationType);
+
+        
 
         Intersection Q;
         CastRayInScene(Ray(closestIntersection.position, wi), Q);
@@ -546,57 +550,24 @@ bool Scene::SampleLight(const vec3 position, Intersection &intersection) const
     // TODO: sample a random point on the light
     // TODO: handle variety of light shapes
     return m_Lights[randomLightIndex]->Intersect(Ray(position, static_cast<Sphere*>(m_Lights[randomLightIndex])->m_center), intersection);
+    /*
+    double z = U01random(prng) * 2.0 - 1.0;
+    double r = sqrt(1.0 - glm::pow2(z));
+    double a = 2.0 * PI * U01random(prng);
+    vec3 N = glm::normalize(vec3(r * cos(a), r * sin(a), z));
+    intersection.normal = N;
+    intersection.position = static_cast<Sphere*>(m_Lights[randomLightIndex])l->m_center + intersection.normal * static_cast<Sphere*>(m_Lights[randomLightIndex])->m_radius;*/
 }
 
-float Scene::PDFLight() const
+double Scene::PDFLight(double radius) const
 {
     assert(m_Lights.size() > 0);
 
     // TODO: update when we sample points on lights instead of always choosing the center
-    return 1.0f / (float)m_Lights.size();
+    return 1.0 / (double)m_Lights.size();
+    // return 1.0f / ((double)m_Lights.size() * PI * glm::pow2(radius));
 }
 
-double GeometryFactor(const Intersection &a, const Intersection &b)
-{
-    vec3 d = a.position - b.position;
-
-    return glm::abs(glm::dot(a.normal, d)) * glm::abs(glm::dot(b.normal, d)) / (glm::pow2(glm::dot(d, d)));
-}
-
-// Quat to rotate a to b
-quat quatA2B(const vec3 a, const vec3 b)
-{
-    // Axis around which to rotate
-    vec3 rotationAxis = glm::cross(a, b);
-
-    // If a is parallel to b
-    if (glm::l2Norm(rotationAxis) < FLT_EPSILON)
-    {
-        if (glm::dot(a, b) > 0.0)
-        {
-            // Return Identity rotation
-            return quat(1.0, 0.0, 0.0, 0.0);
-        }
-        else
-        {
-            // Return 180 degree rotation
-            return quat(0.0, 1.0, 0.0, 0.0);
-        }
-    }
-    else
-    {
-        return glm::angleAxis(glm::acos(glm::dot(a, b) / glm::l2Norm(a) * glm::l2Norm(b)), glm::normalize(rotationAxis));
-    }
-}
-
-vec3 SampleCone(const vec3 v, double cosTheta, double phi)
-{
-    double sinTheta = glm::sqrt(1.0 - glm::pow2(cosTheta));
-    vec3 k(sinTheta * glm::cos(phi), sinTheta * glm::sin(phi), cosTheta); // Vector centered on Z
-    quat zToV = quatA2B(vec3(0.0, 0.0, 1.0), v);
-
-    return glm::rotate(zToV, k);
-}
 
 void Scene::CastRayInScene(const Ray& ray, Intersection& closestIntersection) const
 {
@@ -622,18 +593,6 @@ void Scene::CastRayInScene(const Ray& ray, Intersection& closestIntersection) co
     }
 }
 
-double Characteristic(double d)
-{
-    if (d > 0)
-    {
-        return 1.0;
-    }
-    else
-    {
-        return 0.0;
-    }
-}
-
 double D(double mDotN, double roughness)
 {
     /*return Characteristic(mDotN) * ((roughness + 2.0) / (2.0 * PI)) * pow(mDotN, roughness);
@@ -650,11 +609,6 @@ double D(double mDotN, double roughness)
     {
         return 0;
     }
-}
-
-double tanTheta(double vDotN)
-{
-    return sqrt(1.0 - glm::pow2(vDotN)) / vDotN;
 }
 
 double G1(double nDotV, double roughness)

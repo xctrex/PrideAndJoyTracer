@@ -30,3 +30,5 @@ typedef glm::dquat quat;
 
 const float INF = std::numeric_limits<float>::max();
 //typedef Eigen::AlignedBox<float, 3> Box3d;
+
+const double PI = 3.14159;

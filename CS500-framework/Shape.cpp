@@ -1,25 +1,246 @@
 #include "stdafx.h"
 #include "Shape.h"
 
+static const double indexOfRefractionAir = 1.0;
+
+// A good quality *thread-safe* Mersenne Twister random number generator.
+#include <random>
+static std::mt19937_64 prng;
+static std::uniform_real_distribution<> U01random(0.0, 1.0);
+// Call U01random(prng) to get a uniformly distributed random number in [0,1].
+
 Eigen::AlignedBox<float, 3> bounding_box(const Shape* obj)
 {
     return obj->BoundingBox();
 }
 
 
-vec3 Intersection::SampleBRDF(const vec3 wo) const
+double GeometryFactor(const Intersection &a, const Intersection &b)
 {
-    return vec3(0.0, 0.0, 0.0);
+    vec3 d = a.position - b.position;
+
+    return glm::abs(glm::dot(a.normal, d)) * glm::abs(glm::dot(b.normal, d)) / (glm::pow2(glm::dot(d, d)));
+}
+
+// Quat to rotate a to b
+quat quatA2B(const vec3 a, const vec3 b)
+{
+    // Axis around which to rotate
+    vec3 rotationAxis = glm::cross(a, b);
+
+    // If a is parallel to b
+    if (glm::l2Norm(rotationAxis) < FLT_EPSILON)
+    {
+        if (glm::dot(a, b) > 0.0)
+        {
+            // Return Identity rotation
+            return quat(1.0, 0.0, 0.0, 0.0);
+        }
+        else
+        {
+            // Return 180 degree rotation
+            return quat(0.0, 1.0, 0.0, 0.0);
+        }
+    }
+    else
+    {
+        return glm::angleAxis(glm::acos(glm::dot(a, b) / glm::l2Norm(a) * glm::l2Norm(b)), glm::normalize(rotationAxis));
+    }
+}
+
+vec3 SampleCone(const vec3 v, double cosTheta, double phi)
+{
+    double sinTheta = glm::sqrt(1.0 - glm::pow2(cosTheta));
+    vec3 k(sinTheta * glm::cos(phi), sinTheta * glm::sin(phi), cosTheta); // Vector centered on Z
+    quat zToV = quatA2B(vec3(0.0, 0.0, 1.0), v);
+
+    return glm::rotate(zToV, k);
+}
+
+double signX(double x)
+{
+    return x >= 0.0 ? 1.0 : -1.0;
+}
+
+Intersection::Intersection()
+{
+    // Calculate probabilities for choosing diffuse, reflection, or transmission
+    double s = glm::l2Norm(Kd()) + glm::l2Norm(Ks()) + glm::l2Norm(Kd());
+    m_probabilityDiffuse = glm::l2Norm(Kd()) / s;
+    m_probabilityReflection = glm::l2Norm(Ks()) / s;
+    m_probabilityTransmission = glm::l2Norm(Kt()) / s;
+}
+
+double Radicand(vec3 wo, vec3 m, double indexOfRefraction)
+{
+    return 1.0 - glm::pow2(indexOfRefraction) * (1.0 - glm::pow2(glm::dot(wo, m)));
+}
+
+void Intersection::SampleBRDF(const vec3 wo, vec3 &wi, RadiationType &type) const
+{
+    // Choose diffuse, reflection, or transmission
+    double choice = U01random(prng);
+    double rand1 = U01random(prng);
+    double rand2 = U01random(prng);
+    vec3 m;
+    // Choose wi
+    if (choice < m_probabilityDiffuse)
+    {
+        // Diffuse
+        type = RadiationType::Diffuse;
+        wi = SampleCone(normal, glm::sqrt(rand1), 2.0 * PI * rand2);
+    }
+    else if (choice < m_probabilityDiffuse + m_probabilityReflection)
+    {
+        // Reflection
+        type = RadiationType::Reflection;
+        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() + 1.0)), 2.0 * PI * rand2);
+        wi = 2.0 * glm::dot(wo, m) * m - wo;
+    }
+    else
+    {
+        // Transmission
+        type = RadiationType::Transmission;
+        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() + 1.0)), 2.0 * PI * rand2);
+        double radicand = Radicand(wo, m, IndexOfRefraction());
+        if (radicand < 0.0)
+        {
+            // Use above reflection for total internal reflection
+            //m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() + 1.0)), 2.0 * PI * rand2);
+            wi = 2.0 * glm::dot(wo, m) * m - wo;
+        }
+        else
+        {
+            wi = (IndexOfRefraction() * glm::dot(wo, m) - signX(glm::dot(wo, normal) * glm::sqrt(radicand))) * m - IndexOfRefraction() * wo;
+        }
+    }
+}
+
+double Intersection::Pd(const vec3 wo, const vec3 wi) const
+{
+    return glm::abs(glm::dot(wi, normal)) / PI;
+}
+
+double Intersection::Pr(const vec3 wo, const vec3 wi) const
+{
+    vec3 m = glm::normalize(wo + wi);
+    return D(m) * glm::abs(glm::dot(m, normal)) * (1.0 / (4 * glm::abs(glm::dot(wi, m))));
+}
+
+double Intersection::Pt(const vec3 wo, const vec3 wi) const
+{
+    if (Radicand(wo, glm::normalize(wo + wi), IndexOfRefraction()) >= 0)
+    {
+        double no = 1.0;
+        double ni = 1.0;
+
+        // TODO: enable this
+        /*if (glm::dot(wo, normal) >= 0.0)
+        {
+            no = indexOfRefractionAir;
+            ni = IndexOfRefraction();
+        }
+        else
+        {
+            no = IndexOfRefraction();
+            ni = indexOfRefractionAir;
+        }*/
+        vec3 m = -glm::normalize(no * wi + ni * wo);
+        return D(m) * glm::abs(glm::dot(m, normal)) * glm::pow2(no) * glm::abs(glm::dot(wi, m)) / glm::pow2(ni * glm::dot(wi, m) + no * glm::dot(wo, m));
+    }
+    else
+    {
+        return Pr(wo, wi);
+    }
 }
 
 double Intersection::PDFBRDF(const vec3 wo, const vec3 wi) const
 {
+    return m_probabilityDiffuse * Pd(wo, wi) + m_probabilityReflection * Pr(wo, wi) + m_probabilityTransmission * Pt(wo, wi);
+}
+
+double Characteristic(double d)
+{
+    if (d > 0)
+    {
+        return 1.0;
+    }
+    else
+    {
+        return 0.0;
+    }
+}
+
+double Intersection::D(const vec3 m) const
+{
+    return Characteristic(glm::dot(m, normal)) * ((Roughness() + 2.0) / (2.0 * PI)) * glm::pow(glm::dot(m, normal), Roughness());
+}
+
+double tanTheta(double vDotN)
+{
+    return sqrt(1.0 - glm::pow2(vDotN)) / vDotN;
+}
+
+double Intersection::G1(double nDotV) const
+{
+    /*double a = sqrt((roughness / 2.0) + 1.0) / tanTheta(glm::dot(v, N));
+    if (a < 1.6)
+    {
+    return Characteristic(glm::dot(v, m) / glm::dot(v, N)) * (3.53 * a + 2.181 * glm::pow2(a)) / (1.0 + 2.276 * a + 2.577 * glm::pow2(a));
+    }
+    else
+    {
     return 1.0;
+    }*/
+
+    // Beckmann
+    double c = nDotV / (glm::pow2(Roughness()) * sqrt(1.0 - glm::pow2(nDotV)));
+    if (c < 1.6)
+    {
+        return (3.535 * c + 2.181 * glm::pow2(c)) / (1.0 + 2.276 * c + 2.577 * glm::pow2(c));
+    }
+    else
+    {
+        return 1.0;
+    }
+}
+
+double Intersection::G(const vec3 wo, const vec3 wi, const vec3 m) const
+{
+    return G1(glm::dot(wo, m)) * G1(glm::dot(wi, m));
+}
+
+vec3 Intersection::F(double vDotH) const
+{
+    // Schlick Fresnel approximation
+    return Ks() + (vec3(1.0, 1.0, 1.0) - Ks()) * glm::pow(1.0 - vDotH, 5.0);
+}
+
+vec3 Intersection::Ed(const vec3 wo, const vec3 wi) const
+{
+    return Kd() / PI;
+}
+
+vec3 Intersection::Er(const vec3 wo, const vec3 wi) const
+{
+    vec3 m = glm::normalize(wo + wi);
+    return D(m) * G(wo, wi, m) * F(glm::dot(wi, m)) / (4.0 * glm::abs(glm::dot(wi, normal)) * glm::abs(glm::dot(wo, normal)));
+}
+
+vec3 Intersection::Et(const vec3 wo, const vec3 wi) const
+{
+    // TODO: set these properly, probably when the intersection is first done
+    double no = 1.0;
+    double ni = 1.0;
+
+    vec3 m = -glm::normalize(no * wi + no * wo);
+    vec3 brdf = D(m) * G(wo, wi, m) * (1.0 - F(glm::dot(wi, m))) / (glm::abs(glm::dot(wi, normal)) * glm::abs(glm::dot(wo, normal)));
+    return brdf * glm::abs(glm::dot(wi, m)) * glm::abs(glm::dot(wo, m)) * glm::pow2(no) / glm::pow2(ni * glm::dot(wi, m) + no * glm::dot(wo, m));
 }
 
 vec3 Intersection::EvaluateBRDF(const vec3 wo, const vec3 wi) const
 {
-    return vec3(0.0, 0.0, 0.0);
+    return m_probabilityDiffuse * Ed(wo, wi) + m_probabilityReflection * Er(wo, wi) + m_probabilityTransmission * Et(wo, wi) * glm::dot(wi,normal);
 }
 
 bool Sphere::Intersect(const Ray& ray, Intersection& intersection) const

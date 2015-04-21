@@ -87,19 +87,14 @@ public:
     void RayTraceImage(vec3* image, const int pass);
     vec3 RayTrace(const Ray& ray) const;
     void PathTraceImage(vec3* image, const int pass);
-    vec3 PathTrace(const Ray& ray) const;
+    vec3 PathTrace(const Ray& ray, double no) const;
 
     // Sample a random point on a random light
     bool SampleLight(const vec3 position, Intersection &intersection) const;
     // Returns probability that a light is chosen
-    float PDFLight() const;
+    double PDFLight(double radius) const;
 
     std::vector<Shape*> m_Objects;
     std::vector<Shape*> m_Lights;
 };
 
-
-// Calculates the effect of light leaving one point and stringing another point
-double GeometryFactor(const Intersection &a, const Intersection &b);
-// Samples a cone of random vectors around V
-vec3 SampleCone(const vec3 v, double cosTheta, double phi);

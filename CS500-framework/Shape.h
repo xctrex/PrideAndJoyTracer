@@ -16,6 +16,11 @@ struct Material
 
 class Intersection;
 
+// Calculates the effect of light leaving one point and stringing another point
+double GeometryFactor(const Intersection &a, const Intersection &b);
+// Samples a cone of random vectors around V
+vec3 SampleCone(const vec3 v, double cosTheta, double phi);
+
 class Shape
 {
 public:
@@ -180,17 +185,50 @@ public:
     vec3 m_v2;
 };
 
+enum class RadiationType
+{
+    Diffuse,
+    Reflection,
+    Transmission
+};
+
 class Intersection
 {
 public:
-    Intersection(){};
+    Intersection();
     bool IsValid() const { return t < FLT_MAX - FLT_EPSILON; }
-    vec3 SampleBRDF(const vec3 wo) const;
+    void SampleBRDF(const vec3 wo, vec3 &wi, RadiationType &type) const;
     double PDFBRDF(const vec3 wo, const vec3 wi) const;
     vec3 EvaluateBRDF(const vec3 wo, const vec3 wi) const;
+    vec3 Kd() const { return object->Kd(); }
+    vec3 Ks() const { return object->Ks(); }
+    vec3 Kt() const { return object->Kt(); }
+    double Roughness() const { return object->Roughness(); }
+    double IndexOfRefraction() const { return object->IndexOfRefraction(); }
+    bool IsLight() const { return object->IsLight(); }
     double t = FLT_MAX;
     vec3 normal;
     vec3 position;
     const Shape *object;
+private:
+    double Pd(const vec3 wo, const vec3 wi) const;
+    double Pr(const vec3 wo, const vec3 wi) const;
+    double Pt(const vec3 wo, const vec3 wi) const;
+    vec3 Ed(const vec3 wo, const vec3 wi) const;
+    vec3 Er(const vec3 wo, const vec3 wi) const;
+    vec3 Et(const vec3 wo, const vec3 wi) const;
+
+    double D(const vec3 m) const;
+    double G1(double nDotV) const;
+    double G(const vec3 wo, const vec3 wi, const vec3 m) const;
+    vec3 F(double vDotH) const;
+
+    double m_probabilityDiffuse;
+    double m_probabilityReflection;
+    double m_probabilityTransmission;
+    double m_no;
+    double m_ni;
 };
 
+double Characteristic(double d);
+double tanTheta(double vDotN);
