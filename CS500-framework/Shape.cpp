@@ -97,14 +97,14 @@ void Intersection::SampleBRDF(const vec3 wo, vec3 &wi, RadiationType &type) cons
     {
         // Reflection
         type = RadiationType::Reflection;
-        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 20 + 1.0)), 2.0 * PI * rand2);
+        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 2 + 1.0)), 2.0 * PI * rand2);
         wi = 2.0 * glm::dot(wo, m) * m - wo;
     }
     else
     {
         // Transmission
         type = RadiationType::Transmission;
-        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 20 + 1.0)), 2.0 * PI * rand2);
+        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 2 + 1.0)), 2.0 * PI * rand2);
         double radicand = Radicand(wo, m, IndexOfRefraction());
         if (radicand < 0.0)
         {
@@ -127,7 +127,7 @@ double Intersection::Pd(const vec3 wo, const vec3 wi) const
 double Intersection::Pr(const vec3 wo, const vec3 wi) const
 {
     vec3 m = glm::normalize(wo + wi);
-    return D(m) * glm::abs(glm::dot(m, normal)) * (1.0 / (4 * glm::abs(glm::dot(wi, m))));
+    return D(m) * glm::abs(glm::dot(m, normal)) * (1.0 / (4.0 * glm::abs(glm::dot(wi, m))));
 }
 
 double Intersection::Pt(const vec3 wo, const vec3 wi) const
@@ -189,7 +189,7 @@ double Intersection::D(const vec3 m) const
     {
         // Project 4 D
         // Even with the Charactersitic function, we still need to check mDotN > 0, otherwise pow could be undefined if roughness is a fraction
-        return Characteristic(glm::dot(m, normal)) * ((Roughness() + 2.0) / (2.0 * PI)) * glm::pow(glm::dot(m, normal), Roughness());
+        return Characteristic(mDotN) * ((Roughness() + 2.0) / (2.0 * PI)) * glm::pow(mDotN, Roughness());
         // Trowbridge-Reitz GGX
         //return glm::pow4(Roughness()) / (PI * glm::pow2(glm::pow2(mDotN) * (glm::pow4(Roughness()) - 1.0) + 1.0));
     }
