@@ -188,6 +188,7 @@ double Intersection::D(const vec3 m) const
     double mDotN = glm::dot(m, normal);
     if (mDotN > 0)
     {
+        // Project 4 D
         return Characteristic(glm::dot(m, normal)) * ((Roughness() + 2.0) / (2.0 * PI)) * glm::pow(glm::dot(m, normal), Roughness());
         //return glm::pow4(Roughness()) / (PI * glm::pow2(glm::pow2(mDotN) * (glm::pow4(Roughness()) - 1.0) + 1.0));
     }
@@ -202,20 +203,23 @@ double tanTheta(double vDotN)
     return sqrt(1.0 - glm::pow2(vDotN)) / vDotN;
 }
 
-double Intersection::G1(double nDotV) const
+double Intersection::G1(const vec3 v, const vec3 m) const
 {
-    /*double a = sqrt((roughness / 2.0) + 1.0) / tanTheta(glm::dot(v, N));
+    // Project 4 G
+    double nDotV = glm::dot(normal, v);
+    double vDotm = glm::dot(v, m);
+    double a = sqrt((Roughness() / 2.0) + 1.0) / tanTheta(nDotV);
     if (a < 1.6)
     {
-    return Characteristic(glm::dot(v, m) / glm::dot(v, N)) * (3.53 * a + 2.181 * glm::pow2(a)) / (1.0 + 2.276 * a + 2.577 * glm::pow2(a));
+        return Characteristic(vDotm / nDotV) * (3.53 * a + 2.181 * glm::pow2(a)) / (1.0 + 2.276 * a + 2.577 * glm::pow2(a));
     }
     else
     {
-    return 1.0;
-    }*/
+        return 1.0;
+    }
 
     // Beckmann
-    double c = nDotV / (glm::pow2(Roughness()) * sqrt(1.0 - glm::pow2(nDotV)));
+    /*double c = nDotV / (glm::pow2(Roughness()) * sqrt(1.0 - glm::pow2(nDotV)));
     if (c < 1.6)
     {
         return (3.535 * c + 2.181 * glm::pow2(c)) / (1.0 + 2.276 * c + 2.577 * glm::pow2(c));
@@ -223,13 +227,13 @@ double Intersection::G1(double nDotV) const
     else
     {
         return 1.0;
-    }
+    }*/
 }
 
 double Intersection::G(const vec3 wo, const vec3 wi, const vec3 m) const
 {
-    double ga = G1(glm::dot(wo, m));
-    double gb = G1(glm::dot(wi, m));
+    double ga = G1(wo, m);
+    double gb = G1(wi, m);
     return ga * gb;
 }
 
@@ -271,7 +275,7 @@ vec3 Intersection::EvaluateBRDF(const vec3 wo, const vec3 wi) const
     vec3 reflection = m_probabilityReflection * Er(wo, wi);
     vec3 transmission = m_probabilityTransmission * Et(wo, wi);
     double nDotL = glm::abs(glm::dot(wi, normal));
-    return diffuse + reflection + transmission * nDotL;
+    return (diffuse + reflection + transmission) * nDotL;
 }
 
 bool Sphere::Intersect(const Ray& ray, Intersection& intersection) const

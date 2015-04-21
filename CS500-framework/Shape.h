@@ -220,7 +220,7 @@ private:
     vec3 Et(const vec3 wo, const vec3 wi) const;
 
     double D(const vec3 m) const;
-    double G1(double nDotV) const;
+    double G1(const vec3 v, const vec3 m) const;
     double G(const vec3 wo, const vec3 wi, const vec3 m) const;
     vec3 F(double vDotH) const;
 

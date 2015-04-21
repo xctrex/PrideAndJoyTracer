@@ -31,7 +31,7 @@
 #include "raytrace.h"
 #include "WriteImage.h"
 
-#define NUM_PASSES 100
+#define NUM_PASSES 10
 
 // Read a scene file by parsing each line as a command and calling
 // scene->Command(...) with the results.
