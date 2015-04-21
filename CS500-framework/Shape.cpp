@@ -29,7 +29,7 @@ quat quatA2B(const vec3 a, const vec3 b)
     vec3 rotationAxis = glm::cross(a, b);
 
     // If a is parallel to b
-    if (glm::l2Norm(rotationAxis) < FLT_EPSILON)
+    if (glm::dot(rotationAxis, rotationAxis) < FLT_EPSILON)
     {
         if (glm::dot(a, b) > 0.0)
         {
@@ -44,7 +44,7 @@ quat quatA2B(const vec3 a, const vec3 b)
     }
     else
     {
-        return glm::angleAxis(glm::acos(glm::dot(a, b) / glm::l2Norm(a) * glm::l2Norm(b)), glm::normalize(rotationAxis));
+        return glm::angleAxis(glm::acos(glm::dot(a, b) / (glm::l2Norm(a) * glm::l2Norm(b))), rotationAxis / glm::l2Norm(rotationAxis));
     }
 }
 
@@ -97,14 +97,14 @@ void Intersection::SampleBRDF(const vec3 wo, vec3 &wi, RadiationType &type) cons
     {
         // Reflection
         type = RadiationType::Reflection;
-        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() + 1.0)), 2.0 * PI * rand2);
+        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 20 + 1.0)), 2.0 * PI * rand2);
         wi = 2.0 * glm::dot(wo, m) * m - wo;
     }
     else
     {
         // Transmission
         type = RadiationType::Transmission;
-        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() + 1.0)), 2.0 * PI * rand2);
+        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 20 + 1.0)), 2.0 * PI * rand2);
         double radicand = Radicand(wo, m, IndexOfRefraction());
         if (radicand < 0.0)
         {
@@ -184,12 +184,13 @@ double Characteristic(double d)
 
 double Intersection::D(const vec3 m) const
 {
-    // Trowbridge-Reitz GGX
     double mDotN = glm::dot(m, normal);
     if (mDotN > 0)
     {
         // Project 4 D
+        // Even with the Charactersitic function, we still need to check mDotN > 0, otherwise pow could be undefined if roughness is a fraction
         return Characteristic(glm::dot(m, normal)) * ((Roughness() + 2.0) / (2.0 * PI)) * glm::pow(glm::dot(m, normal), Roughness());
+        // Trowbridge-Reitz GGX
         //return glm::pow4(Roughness()) / (PI * glm::pow2(glm::pow2(mDotN) * (glm::pow4(Roughness()) - 1.0) + 1.0));
     }
     else
@@ -205,8 +206,8 @@ double tanTheta(double vDotN)
 
 double Intersection::G1(const vec3 v, const vec3 m) const
 {
-    // Project 4 G
     double nDotV = glm::dot(normal, v);
+    // Project 4 G
     double vDotm = glm::dot(v, m);
     double a = sqrt((Roughness() / 2.0) + 1.0) / tanTheta(nDotV);
     if (a < 1.6)
@@ -252,6 +253,8 @@ vec3 Intersection::Er(const vec3 wo, const vec3 wi) const
 {
     vec3 m = glm::normalize(wo + wi);
     double d = D(m);
+    if (d < FLT_EPSILON)
+        d = D(-m);
     double g = G(wo, wi, m);
     vec3 f = F(glm::dot(wi, m));
     double denominator =  (4.0 * glm::abs(glm::dot(wi, normal)) * glm::abs(glm::dot(wo, normal)));

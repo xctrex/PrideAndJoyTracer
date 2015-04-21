@@ -639,7 +639,7 @@ double G1(double nDotV, double roughness)
         return 1.0;
     }*/
 
-    // Beckmann
+    /*// Beckmann
     double c = nDotV / (glm::pow2(roughness) * sqrt(1.0 - glm::pow2(nDotV)));
     if (c < 1.6)
     {
@@ -648,7 +648,7 @@ double G1(double nDotV, double roughness)
     else
     {
         return 1.0;
-    }
+    }*/
 }
 
 double G(double nDotV, double nDotL, double roughness)
