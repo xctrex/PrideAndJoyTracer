@@ -87,7 +87,7 @@ public:
     void RayTraceImage(vec3* image, const int pass);
     vec3 RayTrace(const Ray& ray) const;
     void PathTraceImage(const std::string, vec3* image, const int pass);
-    vec3 PathTrace(const Ray& ray, double no) const;
+    vec3 PathTrace(const Ray& ray) const;
 
     // Sample a random point on a random light
     bool SampleLight(const vec3 position, Intersection &intersection) const;

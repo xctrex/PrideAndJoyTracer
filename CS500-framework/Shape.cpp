@@ -97,14 +97,14 @@ void Intersection::SampleBRDF(const vec3 wo, vec3 &wi, RadiationType &type) cons
     {
         // Reflection
         type = RadiationType::Reflection;
-        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 2 + 1.0)), 2.0 * PI * rand2);
+        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 2.0 + 1.0)), 2.0 * PI * rand2);
         wi = 2.0 * glm::dot(wo, m) * m - wo;
     }
     else
     {
         // Transmission
         type = RadiationType::Transmission;
-        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 2 + 1.0)), 2.0 * PI * rand2);
+        m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 2.0 + 1.0)), 2.0 * PI * rand2);
         double radicand = Radicand(wo, m, IndexOfRefraction());
         if (radicand < 0.0)
         {
@@ -114,9 +114,10 @@ void Intersection::SampleBRDF(const vec3 wo, vec3 &wi, RadiationType &type) cons
         }
         else
         {
-            wi = (IndexOfRefraction() * glm::dot(wo, m) - signX(glm::dot(wo, normal) * glm::sqrt(radicand))) * m - IndexOfRefraction() * wo;
+            wi = (IndexOfRefraction() * glm::dot(wo, m) - signX(glm::dot(wo, normal)) * glm::sqrt(radicand)) * m - IndexOfRefraction() * wo;
         }
     }
+    wi = glm::normalize(wi);
 }
 
 double Intersection::Pd(const vec3 wo, const vec3 wi) const
@@ -134,26 +135,12 @@ double Intersection::Pt(const vec3 wo, const vec3 wi) const
 {
     if (Radicand(wo, glm::normalize(wo + wi), IndexOfRefraction()) >= 0)
     {
-        double no = 1.0;
-        double ni = 1.0;
-
-        // TODO: enable this
-        /*if (glm::dot(wo, normal) >= 0.0)
-        {
-            no = indexOfRefractionAir;
-            ni = IndexOfRefraction();
-        }
-        else
-        {
-            no = IndexOfRefraction();
-            ni = indexOfRefractionAir;
-        }*/
-        vec3 m = -glm::normalize(no * wi + ni * wo);
+        vec3 m = -glm::normalize(m_no * wi + m_ni * wo);
         double d = D(m);
         double absMdotN = glm::abs(glm::dot(m, normal));
-        double pow2No = glm::pow2(no);
+        double pow2No = glm::pow2(m_no);
         double absWidotN = glm::abs(glm::dot(wi, m));
-        double denominator = glm::pow2(ni * glm::dot(wi, m) + no * glm::dot(wo, m));
+        double denominator = glm::pow2(m_ni * glm::dot(wi, m) + m_no * glm::dot(wo, m));
         return d * absMdotN * pow2No * absWidotN / denominator;
     }
     else
@@ -253,8 +240,6 @@ vec3 Intersection::Er(const vec3 wo, const vec3 wi) const
 {
     vec3 m = glm::normalize(wo + wi);
     double d = D(m);
-    if (d < FLT_EPSILON)
-        d = D(-m);
     double g = G(wo, wi, m);
     vec3 f = F(glm::dot(wi, m));
     double denominator =  (4.0 * glm::abs(glm::dot(wi, normal)) * glm::abs(glm::dot(wo, normal)));
@@ -263,13 +248,9 @@ vec3 Intersection::Er(const vec3 wo, const vec3 wi) const
 
 vec3 Intersection::Et(const vec3 wo, const vec3 wi) const
 {
-    // TODO: set these properly, probably when the intersection is first done
-    double no = 1.0;
-    double ni = 1.0;
-
-    vec3 m = -glm::normalize(no * wi + no * wo);
+    vec3 m = -glm::normalize(m_no * wi + m_ni * wo);
     vec3 brdf = D(m) * G(wo, wi, m) * (1.0 - F(glm::dot(wi, m))) / (glm::abs(glm::dot(wi, normal)) * glm::abs(glm::dot(wo, normal)));
-    return brdf * glm::abs(glm::dot(wi, m)) * glm::abs(glm::dot(wo, m)) * glm::pow2(no) / glm::pow2(ni * glm::dot(wi, m) + no * glm::dot(wo, m));
+    return brdf * glm::abs(glm::dot(wi, m)) * glm::abs(glm::dot(wo, m)) * glm::pow2(m_no) / glm::pow2(m_no * glm::dot(wi, m) + m_ni * glm::dot(wo, m));
 }
 
 vec3 Intersection::EvaluateBRDF(const vec3 wo, const vec3 wi) const

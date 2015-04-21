@@ -414,7 +414,7 @@ void Scene::PathTraceImage(const std::string hdrName, vec3* image, const int pas
                 {
                     Ray ray = m_Camera.CalculateRayAtPixel((double)x, (double)y);
 
-                    image[y*m_Width + x] += PathTrace(ray, indexOfRefractionAir);
+                    image[y*m_Width + x] += PathTrace(ray);
                 }
             }
 
@@ -428,7 +428,7 @@ void Scene::PathTraceImage(const std::string hdrName, vec3* image, const int pas
         {
             Ray ray = m_Camera.CalculateRayAtPixel((double)m_pixelX, (double)m_pixelY);
 
-            image[m_pixelY*m_Width + m_pixelX] += PathTrace(ray, indexOfRefractionAir);
+            image[m_pixelY*m_Width + m_pixelX] += PathTrace(ray);
         }
     }
     fprintf(stderr, "\n");
@@ -457,7 +457,7 @@ vec3 Scene::RayTrace(const Ray& ray) const
     }
 }
 
-vec3 Scene::PathTrace(const Ray& ray, double no) const
+vec3 Scene::PathTrace(const Ray& ray) const
 {
     vec3 AccumulatedColor(0.0, 0.0, 0.0);
     vec3 AccumalatedImportanceWeight(1.0, 1.0, 1.0);
@@ -482,7 +482,7 @@ vec3 Scene::PathTrace(const Ray& ray, double no) const
     }
     
     vec3 wo = -ray.GetR();
-    //no = indexOfRefractionAir;
+    closestIntersection.m_no = closestIntersection.m_ni = indexOfRefractionAir;
     // Start with hard coded 10 passes per ray
     // TODO: update this to russian roulette
     for (int roulette = 0; roulette < 10; ++roulette)
@@ -495,7 +495,7 @@ vec3 Scene::PathTrace(const Ray& ray, double no) const
         double q = PDFLight(static_cast<const Sphere*>(lightSample.object)->m_radius);
 
         // Get the direction to the light sample
-        vec3 wi = lightSample.position - closestIntersection.position;
+        vec3 wi = glm::normalize(lightSample.position - closestIntersection.position);
         
         // See if light is visible from intersection point
         Intersection shadowIntersection;
@@ -523,6 +523,17 @@ vec3 Scene::PathTrace(const Ray& ray, double no) const
             break;
         }
         Q.CalculateProbabilities();
+        if (radiationType == RadiationType::Transmission)
+        {
+            // Q is the opposite of no
+            // Note, this only handles passing from air to a transmissive object or vice versa, not travelling from one transmissive object to the next
+            closestIntersection.m_ni = (closestIntersection.m_no > indexOfRefractionAir - FLT_EPSILON && closestIntersection.m_no < indexOfRefractionAir + FLT_EPSILON) ? Q.IndexOfRefraction() : indexOfRefractionAir;
+        }
+        else
+        {
+            closestIntersection.m_ni = closestIntersection.m_no;
+        }
+        Q.m_no = closestIntersection.m_ni;
 
         double probability = closestIntersection.PDFBRDF(wo, wi);
         if (probability < 0.000001 || probability == DBL_MAX)
@@ -639,7 +650,7 @@ double G1(double nDotV, double roughness)
         return 1.0;
     }*/
 
-    /*// Beckmann
+    // Beckmann
     double c = nDotV / (glm::pow2(roughness) * sqrt(1.0 - glm::pow2(nDotV)));
     if (c < 1.6)
     {
@@ -648,7 +659,7 @@ double G1(double nDotV, double roughness)
     else
     {
         return 1.0;
-    }*/
+    }
 }
 
 double G(double nDotV, double nDotL, double roughness)

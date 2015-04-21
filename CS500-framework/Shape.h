@@ -211,6 +211,8 @@ public:
     vec3 normal;
     vec3 position;
     const Shape *object;
+    double m_no;
+    double m_ni;
 private:
     double Pd(const vec3 wo, const vec3 wi) const;
     double Pr(const vec3 wo, const vec3 wi) const;
@@ -227,8 +229,6 @@ private:
     double m_probabilityDiffuse;
     double m_probabilityReflection;
     double m_probabilityTransmission;
-    double m_no;
-    double m_ni;
 };
 
 double Characteristic(double d);
