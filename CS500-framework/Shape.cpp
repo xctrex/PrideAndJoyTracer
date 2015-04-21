@@ -68,7 +68,7 @@ Intersection::Intersection()
 void Intersection::CalculateProbabilities()
 {
     // Calculate probabilities for choosing diffuse, reflection, or transmission
-    double s = glm::l2Norm(Kd()) + glm::l2Norm(Ks()) + glm::l2Norm(Kd());
+    double s = glm::l2Norm(Kd()) + glm::l2Norm(Ks()) + glm::l2Norm(Kt());
     m_probabilityDiffuse = glm::l2Norm(Kd()) / s;
     m_probabilityReflection = glm::l2Norm(Ks()) / s;
     m_probabilityTransmission = glm::l2Norm(Kt()) / s;
@@ -149,7 +149,12 @@ double Intersection::Pt(const vec3 wo, const vec3 wi) const
             ni = indexOfRefractionAir;
         }*/
         vec3 m = -glm::normalize(no * wi + ni * wo);
-        return D(m) * glm::abs(glm::dot(m, normal)) * glm::pow2(no) * glm::abs(glm::dot(wi, m)) / glm::pow2(ni * glm::dot(wi, m) + no * glm::dot(wo, m));
+        double d = D(m);
+        double absMdotN = glm::abs(glm::dot(m, normal));
+        double pow2No = glm::pow2(no);
+        double absWidotN = glm::abs(glm::dot(wi, m));
+        double denominator = glm::pow2(ni * glm::dot(wi, m) + no * glm::dot(wo, m));
+        return d * absMdotN * pow2No * absWidotN / denominator;
     }
     else
     {
@@ -159,7 +164,10 @@ double Intersection::Pt(const vec3 wo, const vec3 wi) const
 
 double Intersection::PDFBRDF(const vec3 wo, const vec3 wi) const
 {
-    return m_probabilityDiffuse * Pd(wo, wi) + m_probabilityReflection * Pr(wo, wi) + m_probabilityTransmission * Pt(wo, wi);
+    double diffuse = m_probabilityDiffuse * Pd(wo, wi);
+    double reflection = m_probabilityReflection * Pr(wo, wi);
+    double transmission = m_probabilityTransmission * Pt(wo, wi);
+    return diffuse + reflection + transmission;
 }
 
 double Characteristic(double d)
@@ -176,7 +184,17 @@ double Characteristic(double d)
 
 double Intersection::D(const vec3 m) const
 {
-    return Characteristic(glm::dot(m, normal)) * ((Roughness() + 2.0) / (2.0 * PI)) * glm::pow(glm::dot(m, normal), Roughness());
+    // Trowbridge-Reitz GGX
+    double mDotN = glm::dot(m, normal);
+    if (mDotN > 0)
+    {
+        return Characteristic(glm::dot(m, normal)) * ((Roughness() + 2.0) / (2.0 * PI)) * glm::pow(glm::dot(m, normal), Roughness());
+        //return glm::pow4(Roughness()) / (PI * glm::pow2(glm::pow2(mDotN) * (glm::pow4(Roughness()) - 1.0) + 1.0));
+    }
+    else
+    {
+        return 0;
+    }
 }
 
 double tanTheta(double vDotN)
@@ -210,7 +228,9 @@ double Intersection::G1(double nDotV) const
 
 double Intersection::G(const vec3 wo, const vec3 wi, const vec3 m) const
 {
-    return G1(glm::dot(wo, m)) * G1(glm::dot(wi, m));
+    double ga = G1(glm::dot(wo, m));
+    double gb = G1(glm::dot(wi, m));
+    return ga * gb;
 }
 
 vec3 Intersection::F(double vDotH) const
@@ -227,7 +247,11 @@ vec3 Intersection::Ed(const vec3 wo, const vec3 wi) const
 vec3 Intersection::Er(const vec3 wo, const vec3 wi) const
 {
     vec3 m = glm::normalize(wo + wi);
-    return D(m) * G(wo, wi, m) * F(glm::dot(wi, m)) / (4.0 * glm::abs(glm::dot(wi, normal)) * glm::abs(glm::dot(wo, normal)));
+    double d = D(m);
+    double g = G(wo, wi, m);
+    vec3 f = F(glm::dot(wi, m));
+    double denominator =  (4.0 * glm::abs(glm::dot(wi, normal)) * glm::abs(glm::dot(wo, normal)));
+    return d * g * f / denominator;
 }
 
 vec3 Intersection::Et(const vec3 wo, const vec3 wi) const
@@ -243,7 +267,11 @@ vec3 Intersection::Et(const vec3 wo, const vec3 wi) const
 
 vec3 Intersection::EvaluateBRDF(const vec3 wo, const vec3 wi) const
 {
-    return m_probabilityDiffuse * Ed(wo, wi) + m_probabilityReflection * Er(wo, wi) + m_probabilityTransmission * Et(wo, wi) * glm::dot(wi,normal);
+    vec3 diffuse = m_probabilityDiffuse * Ed(wo, wi);
+    vec3 reflection = m_probabilityReflection * Er(wo, wi);
+    vec3 transmission = m_probabilityTransmission * Et(wo, wi);
+    double nDotL = glm::abs(glm::dot(wi, normal));
+    return diffuse + reflection + transmission * nDotL;
 }
 
 bool Sphere::Intersect(const Ray& ray, Intersection& intersection) const

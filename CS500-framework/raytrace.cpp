@@ -489,10 +489,10 @@ vec3 Scene::PathTrace(const Ray& ray, double no) const
     {
         // Compute explicite side branch to a random light
         // TODO: sample a random point on the light
-        /*Intersection lightSample;
+        Intersection lightSample;
         SampleLight(closestIntersection.position, lightSample);
         assert(lightSample.IsValid());
-        float lightProbability = PDFLight(static_cast<const Sphere*>(lightSample.object)->m_radius);
+        double q = PDFLight(static_cast<const Sphere*>(lightSample.object)->m_radius);
 
         // Get the direction to the light sample
         vec3 wi = lightSample.position - closestIntersection.position;
@@ -504,11 +504,16 @@ vec3 Scene::PathTrace(const Ray& ray, double no) const
         {
             // The light was hit
             double geometryFactor = GeometryFactor(closestIntersection, lightSample);
+            double p = closestIntersection.PDFBRDF(wo, wi) * geometryFactor;
+            vec3 f = closestIntersection.EvaluateBRDF(wo, wi);
+            double wMIS = q * q / (q * q + p * p);
+            vec3 newColor = lightSample.Kd() * AccumalatedImportanceWeight * wMIS * geometryFactor * f * (1.0 / q);
+            AccumulatedColor += newColor;
         }
-        */
+        
         // Extend path
-        vec3 wi;
         RadiationType radiationType;
+        // Choose a random wi
         closestIntersection.SampleBRDF(wo, wi, radiationType);        
 
         Intersection Q;
@@ -536,9 +541,8 @@ vec3 Scene::PathTrace(const Ray& ray, double no) const
         // Has path hit a light (accidentally)
         if (closestIntersection.object->IsLight())
         {
-            //double q = PDFLight();
-            //double wMIS = glm::pow2(probability) / (glm::pow2(q) + glm::pow2(probability));
-            AccumulatedColor += closestIntersection.object->Kd() * AccumalatedImportanceWeight; // *wMIS; // Accumulate light times importance
+            double wMIS = glm::pow2(probability) / (glm::pow2(q) + glm::pow2(probability));
+            AccumulatedColor += closestIntersection.object->Kd() * AccumalatedImportanceWeight * wMIS; // Accumulate light times importance
             break; //Don't extend path further
         }
     }
@@ -561,7 +565,7 @@ bool Scene::SampleLight(const vec3 position, Intersection &intersection) const
     // Return the center of the bounding box of the light
     // TODO: sample a random point on the light
     // TODO: handle variety of light shapes
-    return m_Lights[randomLightIndex]->Intersect(Ray(position, static_cast<Sphere*>(m_Lights[randomLightIndex])->m_center), intersection);
+    return m_Lights[randomLightIndex]->Intersect(Ray(position, static_cast<Sphere*>(m_Lights[randomLightIndex])->m_center - position), intersection);
     /*
     double z = U01random(prng) * 2.0 - 1.0;
     double r = sqrt(1.0 - glm::pow2(z));
