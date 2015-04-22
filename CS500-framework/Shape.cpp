@@ -86,6 +86,7 @@ void Intersection::SampleBRDF(const vec3 wo, vec3 &wi, RadiationType &type) cons
     double choice = U01random(prng);
     double rand1 = U01random(prng);
     double rand2 = U01random(prng);
+
     vec3 m;
     // Choose wi
     if (choice < m_probabilityDiffuse)
@@ -104,7 +105,7 @@ void Intersection::SampleBRDF(const vec3 wo, vec3 &wi, RadiationType &type) cons
     else
     {
         // Transmission
-        double iof = m_ni / m_no;
+        double iof = m_no / m_ni;
 
         m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 2.0 + 1.0)), 2.0 * PI * rand2);
         double radicand = Radicand(wo, m, iof);
@@ -144,7 +145,7 @@ double Intersection::Pr(const vec3 wo, const vec3 wi) const
 
 double Intersection::Pt(const vec3 wo, const vec3 wi) const
 {
-    if (Radicand(wo, glm::normalize(wo + wi), m_ni / m_no) >= 0)
+    if (Radicand(wo, glm::normalize(wo + wi), m_no / m_ni) >= 0)
     {
         vec3 m = -glm::normalize(m_no * wi + m_ni * wo);
         double d = D(m);
