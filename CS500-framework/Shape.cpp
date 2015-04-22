@@ -76,7 +76,8 @@ void Intersection::CalculateProbabilities()
 
 double Radicand(vec3 wo, vec3 m, double indexOfRefraction)
 {
-    return 1.0 - glm::pow2(indexOfRefraction) * (1.0 - glm::pow2(glm::dot(wo, m)));
+    return 1 + indexOfRefraction * (glm::pow2(glm::dot(wo, m)) - 1.0);
+    //return 1.0 - glm::pow2(indexOfRefraction) * (1.0 - glm::pow2(glm::dot(wo, m)));
 }
 
 void Intersection::SampleBRDF(const vec3 wo, vec3 &wi, RadiationType &type) const
@@ -103,18 +104,28 @@ void Intersection::SampleBRDF(const vec3 wo, vec3 &wi, RadiationType &type) cons
     else
     {
         // Transmission
-        type = RadiationType::Transmission;
+        double iof = m_ni / m_no;
+
         m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() * 2.0 + 1.0)), 2.0 * PI * rand2);
-        double radicand = Radicand(wo, m, IndexOfRefraction());
+        double radicand = Radicand(wo, m, iof);
         if (radicand < 0.0)
         {
+            type = RadiationType::Reflection;
             // Use above reflection for total internal reflection
             //m = SampleCone(normal, glm::pow(rand1, 1.0 / (Roughness() + 1.0)), 2.0 * PI * rand2);
             wi = 2.0 * glm::dot(wo, m) * m - wo;
         }
         else
         {
-            wi = (IndexOfRefraction() * glm::dot(wo, m) - signX(glm::dot(wo, normal)) * glm::sqrt(radicand)) * m - IndexOfRefraction() * wo;
+            type = RadiationType::Transmission;
+            double woDotM = glm::dot(wo, m);
+            double sign = signX(glm::dot(wo, normal));
+            double sqrtRadicand = glm::sqrt(radicand);
+            double alloftheabove = iof * woDotM - sign * sqrtRadicand;
+            vec3 timesM = alloftheabove * m;
+            vec3 minuswo = alloftheabove - iof * wo;
+            wi = minuswo;
+            //wi = (IndexOfRefraction() * glm::dot(wo, m) - signX(glm::dot(wo, normal)) * glm::sqrt(radicand)) * m - IndexOfRefraction() * wo;
         }
     }
     wi = glm::normalize(wi);
@@ -133,7 +144,7 @@ double Intersection::Pr(const vec3 wo, const vec3 wi) const
 
 double Intersection::Pt(const vec3 wo, const vec3 wi) const
 {
-    if (Radicand(wo, glm::normalize(wo + wi), IndexOfRefraction()) >= 0)
+    if (Radicand(wo, glm::normalize(wo + wi), m_ni / m_no) >= 0)
     {
         vec3 m = -glm::normalize(m_no * wi + m_ni * wo);
         double d = D(m);

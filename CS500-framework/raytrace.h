@@ -44,6 +44,7 @@ public:
     vec3 m_ambientColor;
     Antialiasing m_Antialiasing = Off;
     int m_AntialiasingN = 3;
+    int m_numPasses = 1;
     Timer m_Timer;
 
     Eigen::KdBVH<float, 3, Shape*> m_kdBVH;
@@ -86,7 +87,7 @@ public:
     // and return the image.  This is the Ray Tracer!
     void RayTraceImage(vec3* image, const int pass);
     vec3 RayTrace(const Ray& ray) const;
-    void PathTraceImage(const std::string, vec3* image, const int pass);
+    void PathTraceImage(const std::string, vec3* image);
     vec3 PathTrace(const Ray& ray) const;
 
     // Sample a random point on a random light

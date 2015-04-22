@@ -75,6 +75,11 @@ void Scene::Command(const std::string c, const std::vector<double> f, const std:
         m_Camera.m_Height = m_Height;
     }
 
+    else if (c == "passes")
+    {
+        m_numPasses = int(f[0]);
+    }
+
     else if (c == "disableBVH")
     {
         m_usingBVH = false;
@@ -393,7 +398,7 @@ void Scene::RayTraceImage(vec3* image, const int pass)
     printf("RayTraceImage elapsed time: %f\n", m_Timer.Stop());
 }
 
-void Scene::PathTraceImage(const std::string hdrName, vec3* image, const int pass)
+void Scene::PathTraceImage(const std::string hdrName, vec3* image)
 {
     m_Timer.Start();
 
@@ -401,7 +406,7 @@ void Scene::PathTraceImage(const std::string hdrName, vec3* image, const int pas
 
     if (!m_singlePixel)
     {
-        for (int i = 1; i <= pass; ++i)
+        for (int i = 1; i <= m_numPasses; ++i)
         {
             fprintf(stderr, "Pass %4d\r\n", i);
 #ifdef OMP_PARALLEL 
@@ -424,7 +429,7 @@ void Scene::PathTraceImage(const std::string hdrName, vec3* image, const int pas
     }
     else
     {
-        for (int i = 1; i <= pass; ++i)
+        for (int i = 1; i <= m_numPasses; ++i)
         {
             Ray ray = m_Camera.CalculateRayAtPixel((double)m_pixelX, (double)m_pixelY);
 
@@ -504,7 +509,7 @@ vec3 Scene::PathTrace(const Ray& ray) const
         {
             // The light was hit
             double geometryFactor = GeometryFactor(closestIntersection, lightSample);
-            double p = closestIntersection.PDFBRDF(wo, wi) * geometryFactor;
+            double p = closestIntersection.PDFBRDF(wo, wi) * geometryFactor; // TODO: multiply by Russian Roulette
             vec3 f = closestIntersection.EvaluateBRDF(wo, wi);
             double wMIS = q * q / (q * q + p * p);
             vec3 newColor = lightSample.Kd() * AccumalatedImportanceWeight * wMIS * geometryFactor * f * (1.0 / q);
@@ -513,6 +518,10 @@ vec3 Scene::PathTrace(const Ray& ray) const
         
         // Extend path
         RadiationType radiationType;
+        // ni is the opposite of no
+        // Note, this only handles passing from air to a transmissive object or vice versa, not travelling from one transmissive object to the next
+        closestIntersection.m_ni = (closestIntersection.m_no > indexOfRefractionAir - FLT_EPSILON && closestIntersection.m_no < indexOfRefractionAir + FLT_EPSILON) ? closestIntersection.IndexOfRefraction() : indexOfRefractionAir;
+
         // Choose a random wi
         closestIntersection.SampleBRDF(wo, wi, radiationType);        
 
@@ -525,9 +534,9 @@ vec3 Scene::PathTrace(const Ray& ray) const
         Q.CalculateProbabilities();
         if (radiationType == RadiationType::Transmission)
         {
-            // Q is the opposite of no
+            // ni is the opposite of no
             // Note, this only handles passing from air to a transmissive object or vice versa, not travelling from one transmissive object to the next
-            closestIntersection.m_ni = (closestIntersection.m_no > indexOfRefractionAir - FLT_EPSILON && closestIntersection.m_no < indexOfRefractionAir + FLT_EPSILON) ? Q.IndexOfRefraction() : indexOfRefractionAir;
+            closestIntersection.m_ni = (closestIntersection.m_no > indexOfRefractionAir - FLT_EPSILON && closestIntersection.m_no < indexOfRefractionAir + FLT_EPSILON) ? closestIntersection.IndexOfRefraction() : indexOfRefractionAir;
         }
         else
         {
@@ -535,7 +544,7 @@ vec3 Scene::PathTrace(const Ray& ray) const
         }
         Q.m_no = closestIntersection.m_ni;
 
-        double probability = closestIntersection.PDFBRDF(wo, wi);
+        double probability = closestIntersection.PDFBRDF(wo, wi); // TODO: multiply by russian roulette
         if (probability < 0.000001 || probability == DBL_MAX)
         {
             break;
@@ -552,6 +561,7 @@ vec3 Scene::PathTrace(const Ray& ray) const
         // Has path hit a light (accidentally)
         if (closestIntersection.object->IsLight())
         {
+            q = PDFLight(static_cast<const Sphere*>(closestIntersection.object)->m_radius);
             double wMIS = glm::pow2(probability) / (glm::pow2(q) + glm::pow2(probability));
             AccumulatedColor += closestIntersection.object->Kd() * AccumalatedImportanceWeight * wMIS; // Accumulate light times importance
             break; //Don't extend path further

@@ -31,8 +31,6 @@
 #include "raytrace.h"
 #include "WriteImage.h"
 
-#define NUM_PASSES 10000000
-
 // Read a scene file by parsing each line as a command and calling
 // scene->Command(...) with the results.
 void ReadScene(const std::string inName, Scene* scene)
@@ -136,8 +134,8 @@ int main(int argc, char** argv)
             image[y*scene->m_Width + x] = vec3(0,0,0);
 
     // PathTrace the image
-    scene->PathTraceImage(hdrName, image, NUM_PASSES);
+    scene->PathTraceImage(hdrName, image);
 
     // Write the image
-    WriteHdrImage(hdrName, scene->m_Width, scene->m_Height, image, NUM_PASSES);
+    WriteHdrImage(hdrName, scene->m_Width, scene->m_Height, image, scene->m_numPasses);
 }
